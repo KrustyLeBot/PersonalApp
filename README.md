@@ -106,7 +106,7 @@ Set the `ALLOWED_EMAILS` environment variable with a comma-separated list
 of authorized email addresses:
 
 ```bash
-ALLOWED_EMAILS=je.bravais@gmail.com,other.email@example.com
+ALLOWED_EMAILS=other.email@example.com,other2.email@example.com
 ```
 
 Or add it to `.env` / Render environment variables.
