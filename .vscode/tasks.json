@@ -1,0 +1,57 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "1. npm install (frontend)",
+      "type": "shell",
+      "command": "npm install",
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "2. Build frontend (Svelte)",
+      "type": "shell",
+      "command": "npm run build",
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
+      },
+      "dependsOn": ["1. npm install (frontend)"],
+      "problemMatcher": []
+    },
+    {
+      "label": "3. Copier dist vers backend/static",
+      "type": "shell",
+      "windows": {
+        "command": "if (Test-Path '${workspaceFolder}\\backend\\static') { Remove-Item -Recurse -Force '${workspaceFolder}\\backend\\static' }; New-Item -ItemType Directory -Path '${workspaceFolder}\\backend\\static' | Out-Null; Copy-Item -Path '${workspaceFolder}\\frontend\\dist\\*' -Destination '${workspaceFolder}\\backend\\static' -Recurse"
+      },
+      "linux": {
+        "command": "rm -rf ${workspaceFolder}/backend/static && mkdir -p ${workspaceFolder}/backend/static && cp -r ${workspaceFolder}/frontend/dist/* ${workspaceFolder}/backend/static/"
+      },
+      "osx": {
+        "command": "rm -rf ${workspaceFolder}/backend/static && mkdir -p ${workspaceFolder}/backend/static && cp -r ${workspaceFolder}/frontend/dist/* ${workspaceFolder}/backend/static/"
+      },
+      "dependsOn": ["2. Build frontend (Svelte)"],
+      "problemMatcher": []
+    },
+    {
+      "label": "4. Build complet (frontend + copie)",
+      "dependsOn": ["3. Copier dist vers backend/static"],
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "5. go mod tidy (backend)",
+      "type": "shell",
+      "command": "go mod tidy",
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

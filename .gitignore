@@ -1,0 +1,6 @@
+.env
+# Build / generated assets
+/backend/static
+/frontend/dist
+# Dependency folders
+/frontend/node_modules
