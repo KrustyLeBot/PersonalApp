@@ -7,6 +7,7 @@ const (
 	TypeLivret     = "livret"
 	TypeCrypto     = "crypto"
 	TypeBourse     = "bourse"
+	TypeDette      = "dette"
 )
 
 // hasTickerHoldings reports whether the given asset type uses ticker-based positions
@@ -51,10 +52,22 @@ type Summary struct {
 	Assets            []Asset            `json:"assets"`
 	Holdings          map[int][]Holding  `json:"holdings"`           // asset_id → holdings
 	AccountValues     map[int]float64    `json:"account_values"`     // asset_id → computed value
+	Dettes            map[int]DetteInfo  `json:"dettes"`             // asset_id → dette info
 	TickerPrices      map[string]float64 `json:"ticker_prices"`
 	TickerCategories  map[string]string  `json:"ticker_categories"`  // ticker → category label
 	LastRefresh       *string            `json:"last_refresh"`
 	RefreshedToday    bool               `json:"refreshed_today"`
+}
+
+// DetteInfo holds the loan parameters for a dette asset.
+type DetteInfo struct {
+	AssetID         int     `json:"asset_id"`
+	StartDate       string  `json:"start_date"`        // "YYYY-MM-DD"
+	DurationMonths  int     `json:"duration_months"`
+	TAEG            float64 `json:"taeg"`              // annual rate in percent, e.g. 3.5
+	AmountBorrowed  float64 `json:"amount_borrowed"`
+	MonthlyPayment  float64 `json:"monthly_payment"`   // computed, not stored
+	RemainingCapital float64 `json:"remaining_capital"` // computed as of today, not stored
 }
 
 // yahooChartResponse is the subset of the Yahoo Finance v8/chart JSON we parse.

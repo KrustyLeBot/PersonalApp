@@ -35,6 +35,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/portfolio/holdings/{id}",         auth.RequireAuth(h.updateHolding))
 	mux.HandleFunc("DELETE /api/portfolio/holdings/{id}",      auth.RequireAuth(h.deleteHolding))
 
+	// Dette info (one row per dette asset)
+	mux.HandleFunc("PUT /api/portfolio/assets/{id}/dette", auth.RequireAuth(h.upsertDette))
+
 	// Ticker categories
 	mux.HandleFunc("PUT /api/portfolio/tickers/{ticker}/category",    auth.RequireAuth(h.upsertCategory))
 	mux.HandleFunc("DELETE /api/portfolio/tickers/{ticker}/category", auth.RequireAuth(h.deleteCategory))
@@ -56,19 +59,29 @@ func (h *Handler) listAssets(w http.ResponseWriter, r *http.Request, _ string) {
 }
 
 func (h *Handler) createAsset(w http.ResponseWriter, r *http.Request, _ string) {
-	var a Asset
-	if err := json.NewDecoder(r.Body).Decode(&a); err != nil {
+	var body struct {
+		Asset
+		Dette *DetteInfo `json:"dette"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "invalid body", http.StatusBadRequest)
 		return
 	}
-	if a.Type == "" || a.Name == "" {
+	if body.Type == "" || body.Name == "" {
 		http.Error(w, "type and name are required", http.StatusBadRequest)
 		return
 	}
-	id, err := h.repo.CreateAsset(a)
+	id, err := h.repo.CreateAsset(body.Asset)
 	if err != nil {
 		apiError(w, err, http.StatusInternalServerError)
 		return
+	}
+	if body.Type == TypeDette && body.Dette != nil {
+		body.Dette.AssetID = id
+		if err := h.repo.UpsertDette(*body.Dette); err != nil {
+			apiError(w, err, http.StatusInternalServerError)
+			return
+		}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -81,14 +94,24 @@ func (h *Handler) updateAsset(w http.ResponseWriter, r *http.Request, _ string) 
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
-	var a Asset
-	if err := json.NewDecoder(r.Body).Decode(&a); err != nil {
+	var body struct {
+		Asset
+		Dette *DetteInfo `json:"dette"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "invalid body", http.StatusBadRequest)
 		return
 	}
-	if err := h.repo.UpdateAsset(id, a); err != nil {
+	if err := h.repo.UpdateAsset(id, body.Asset); err != nil {
 		apiError(w, err, http.StatusInternalServerError)
 		return
+	}
+	if body.Type == TypeDette && body.Dette != nil {
+		body.Dette.AssetID = id
+		if err := h.repo.UpsertDette(*body.Dette); err != nil {
+			apiError(w, err, http.StatusInternalServerError)
+			return
+		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -181,6 +204,27 @@ func (h *Handler) deleteHolding(w http.ResponseWriter, r *http.Request, _ string
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// --- Dette handler ---
+
+func (h *Handler) upsertDette(w http.ResponseWriter, r *http.Request, _ string) {
+	id, err := pathID(r, "id")
+	if err != nil {
+		http.Error(w, "invalid asset id", http.StatusBadRequest)
+		return
+	}
+	var d DetteInfo
+	if err := json.NewDecoder(r.Body).Decode(&d); err != nil {
+		http.Error(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+	d.AssetID = id
+	if err := h.repo.UpsertDette(d); err != nil {
+		apiError(w, err, http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // --- Summary + refresh ---
 
 func (h *Handler) upsertCategory(w http.ResponseWriter, r *http.Request, _ string) {
@@ -233,8 +277,13 @@ func (h *Handler) summary(w http.ResponseWriter, r *http.Request, _ string) {
 		apiError(w, err, http.StatusInternalServerError)
 		return
 	}
+	dettes, err := h.repo.GetAllDettes()
+	if err != nil {
+		apiError(w, err, http.StatusInternalServerError)
+		return
+	}
 	lastRefresh, _ := h.repo.GetLastRefreshTime()
-	jsonOK(w, h.svc.ComputeSummary(assets, holdings, prices, categories, lastRefresh, refreshed))
+	jsonOK(w, h.svc.ComputeSummary(assets, holdings, prices, categories, dettes, lastRefresh, refreshed))
 }
 
 func (h *Handler) forceRefresh(w http.ResponseWriter, r *http.Request, _ string) {

@@ -164,6 +164,32 @@ func (r *Repo) DeleteHolding(id int) error {
 
 // --- Tickers ---
 
+// GetDistinctBourseTickers returns unique tickers belonging to bourse assets only.
+func (r *Repo) GetDistinctBourseTickers() ([]string, error) {
+	if err := r.requireDB(); err != nil {
+		return nil, err
+	}
+	rows, err := r.db.Query(`
+		SELECT DISTINCT th.ticker
+		FROM ticker_holdings th
+		JOIN assets a ON a.id = th.asset_id
+		WHERE a.type = 'bourse' AND th.ticker != ''
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tickers []string
+	for rows.Next() {
+		var t string
+		if err := rows.Scan(&t); err == nil && t != "" {
+			tickers = append(tickers, t)
+		}
+	}
+	return tickers, nil
+}
+
 // GetDistinctTickers returns all unique tickers across bourse and crypto holdings.
 func (r *Repo) GetDistinctTickers() ([]string, error) {
 	if err := r.requireDB(); err != nil {

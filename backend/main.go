@@ -10,6 +10,7 @@ import (
 	"helloauth/internal/auth"
 	"helloauth/internal/db"
 	"helloauth/internal/portfolio"
+	"helloauth/internal/projection"
 )
 
 func main() {
@@ -48,6 +49,18 @@ func main() {
 	svc := portfolio.NewService(repo, ticker)
 	portfolioHandler := portfolio.NewHandler(repo, svc)
 	portfolioHandler.RegisterRoutes(mux)
+
+	projRepo := projection.NewRepo(database)
+	projCAGR := projection.NewCAGRClient()
+	projSvc := projection.NewService(projRepo, projCAGR, repo)
+	svc.OnTickerRefresh(projSvc.RefreshTickerCAGRs)
+	projHandler := projection.NewHandler(projRepo, projSvc, repo)
+	projHandler.RegisterRoutes(mux)
+	if err := projRepo.SeedDefaults(); err != nil {
+		log.Printf("projection seed defaults: %v", err)
+	}
+	// Populate CAGR rates on first boot if none exist yet.
+	go projSvc.BootstrapCAGRs()
 
 	mux.Handle("/", http.FileServer(http.Dir("./static")))
 

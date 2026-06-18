@@ -3,6 +3,7 @@
   import { Chart, ArcElement, PieController, Tooltip, Legend } from 'chart.js';
   import AssetModal from './AssetModal.svelte';
   import HoldingsModal from './HoldingsModal.svelte';
+  import ProjectionPanel from './ProjectionPanel.svelte';
 
   Chart.register(ArcElement, PieController, Tooltip, Legend);
 
@@ -21,6 +22,8 @@
   let showHoldingsModal = false;
   let selectedAccount = null;
 
+  let showProjection = false;
+
   let typeChartEl, tickerChartEl;
   let typeChart, tickerChart;
 
@@ -30,6 +33,7 @@
     livret:     'Livret',
     crypto:     'Crypto',
     bourse:     'Bourse',
+    dette:      'Dette',
   };
   const COLORS = ['#60a5fa','#34d399','#f59e0b','#a78bfa','#f87171','#38bdf8','#fb923c','#4ade80'];
   const HIDDEN = '••••';
@@ -146,8 +150,13 @@
 
   function assetDisplayValue(a) {
     if (TICKER_BASED.has(a.type)) return summary?.account_values?.[a.id] ?? 0;
+    if (a.type === 'dette') return summary?.account_values?.[a.id] ?? 0;
     return a.value ?? 0;
   }
+
+  const fmtEur = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+
+  function detteOf(a) { return summary?.dettes?.[a.id] ?? null; }
 
   function groupByType(assets) {
     const groups = {};
@@ -207,8 +216,17 @@
           {refreshing ? 'Rafraîchissement...' : '↻ Rafraîchir cotations'}
         </button>
         <button class="btn-primary" on:click={openCreateAsset}>+ Ajouter un actif</button>
+        <button class="btn-projection {showProjection ? 'active' : ''}" on:click={() => showProjection = !showProjection}>
+          📈 Projection
+        </button>
       </div>
     </div>
+
+    {#if showProjection}
+      <div class="projection-section">
+        <ProjectionPanel {confidential} />
+      </div>
+    {/if}
 
     <!-- Charts -->
     <div class="charts-row">
@@ -238,7 +256,7 @@
         <div class="group">
           <div class="group-header">
             <span class="group-title">{TYPE_LABELS[type] || type}</span>
-            <span class="group-total">{fmt(summary.by_type[type] || 0, confidential)}</span>
+            <span class="group-total {type === 'dette' ? 'negative' : ''}">{fmt(summary.by_type[type] || 0, confidential)}</span>
           </div>
 
           {#if TICKER_BASED.has(type)}
@@ -293,9 +311,17 @@
               </thead>
               <tbody>
                 {#each assets as a}
-                  <tr>
-                    <td>{a.name}</td>
-                    <td class="value-cell">{fmt(a.value || 0, confidential)}</td>
+                  {@const d = detteOf(a)}
+                  <tr class={a.type === 'dette' ? 'dette-row' : ''}>
+                    <td>
+                      {a.name}
+                      {#if a.type === 'dette' && d}
+                        <span class="dette-info">{fmtEur.format(d.monthly_payment)}/mois · {d.duration_months} mois · {d.taeg}% TAEG</span>
+                      {/if}
+                    </td>
+                    <td class="value-cell {a.type === 'dette' ? 'negative' : ''}">
+                      {fmt(assetDisplayValue(a), confidential)}
+                    </td>
                     <td class="actions-cell">
                       {#if !confidential}
                         <button class="btn-icon" on:click={() => openEditAsset(a)} title="Modifier">✏️</button>
@@ -321,7 +347,12 @@
 </div>
 
 {#if showAssetModal}
-  <AssetModal asset={editingAsset} on:save={onSaveAsset} on:close={() => showAssetModal = false} />
+  <AssetModal
+    asset={editingAsset}
+    dette={editingAsset ? (summary?.dettes?.[editingAsset.id] ?? null) : null}
+    on:save={onSaveAsset}
+    on:close={() => showAssetModal = false}
+  />
 {/if}
 
 {#if showHoldingsModal && selectedAccount}
@@ -363,6 +394,16 @@
   .btn-confidential:hover { border-color: #64748b; color: #f1f5f9; }
   .btn-confidential.active { border-color: #f59e0b; color: #f59e0b; background: rgba(245,158,11,.08); }
 
+  .btn-projection {
+    background: transparent; border: 1px solid #334155; color: #94a3b8;
+    padding: .6rem 1.1rem; border-radius: 6px; font-size: .9rem; cursor: pointer;
+    transition: border-color .15s, color .15s, background .15s;
+  }
+  .btn-projection:hover { border-color: #64748b; color: #f1f5f9; }
+  .btn-projection.active { border-color: #34d399; color: #34d399; background: rgba(52,211,153,.08); }
+
+  .projection-section { margin-bottom: 2rem; border-top: 1px solid #334155; padding-top: 1.5rem; }
+
   .charts-row { display: flex; gap: 1.5rem; margin-bottom: 2rem; }
   .chart-card { background: #1e293b; border-radius: 10px; padding: 1.5rem; flex: 1; min-width: 0; }
   .chart-card h3 { margin: 0 0 .5rem; font-size: .9rem; color: #94a3b8; font-weight: 500; text-align: center; }
@@ -395,6 +436,13 @@
   .holdings-table { width: 100%; border-collapse: collapse; font-size: .83rem; background: #0f172a; }
   .holdings-table th { padding: .4rem 1.5rem; text-align: left; color: #475569; font-size: .75rem; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; }
   .holdings-table td { padding: .5rem 1.5rem; color: #94a3b8; border-top: 1px solid #1e293b; }
+
+  .dette-row { background: rgba(239,68,68,.06); }
+  .dette-row td { background: transparent; }
+  .dette-row:hover { background: rgba(239,68,68,.12); }
+  .dette-row:hover td { background: transparent !important; }
+  .dette-info { display: block; font-size: .75rem; color: #64748b; margin-top: .15rem; font-weight: 400; }
+  .value-cell.negative, .negative { color: #f87171; }
   .holdings-table tr:hover td { background: #111f35; }
 
   .value-cell { font-weight: 600; color: #f1f5f9; }

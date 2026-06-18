@@ -140,3 +140,4 @@ cd frontend && npm run build
 - **Repository pattern:** all SQL in `*Repo`. Services call repo. Handlers call service.
 - **Auth enforcement:** use `auth.RequireAuth` at route registration. Never inline session checks in handlers.
 - **No error swallowing:** propagate errors; log at handler level only.
+- **Never run `go build`, `go run`, `npm run build`, or any compile/start command.** The user tests and runs the project themselves.

@@ -92,6 +92,34 @@ func (d *Database) Migrate() error {
 			refresh_date DATE        PRIMARY KEY,
 			refreshed_at TIMESTAMPTZ NOT NULL
 		);
+
+		CREATE TABLE IF NOT EXISTS dette_assets (
+			id               SERIAL PRIMARY KEY,
+			asset_id         INTEGER        NOT NULL UNIQUE REFERENCES assets(id) ON DELETE CASCADE,
+			start_date       DATE           NOT NULL,
+			duration_months  INTEGER        NOT NULL,
+			taeg             DECIMAL(6,4)   NOT NULL,
+			amount_borrowed  DECIMAL(15,2)  NOT NULL
+		);
+
+		CREATE TABLE IF NOT EXISTS projection_rates (
+			key           VARCHAR(100) PRIMARY KEY,
+			label         VARCHAR(255) NOT NULL,
+			rate          DECIMAL(8,4) NOT NULL,
+			source_url    TEXT         NOT NULL DEFAULT '',
+			rate_override DECIMAL(8,4) DEFAULT NULL,
+			updated_at    TIMESTAMPTZ  DEFAULT NOW()
+		);
+
+		-- Add rate_override to existing deployments.
+		DO $$ BEGIN
+			IF NOT EXISTS (
+				SELECT FROM information_schema.columns
+				WHERE table_name = 'projection_rates' AND column_name = 'rate_override'
+			) THEN
+				ALTER TABLE projection_rates ADD COLUMN rate_override DECIMAL(8,4) DEFAULT NULL;
+			END IF;
+		END $$;
 	`)
 	return err
 }
