@@ -1,134 +1,90 @@
-# Hello World with restricted Google login
+# Personal Dashboard
 
-Production URL: https://hello-ov0m.onrender.com
+A personal web app built to centralize tools I use daily. Access is restricted to authorized Google accounts.
 
-Small app: Svelte frontend + Go backend, packaged in a single Docker container.
-Access to the page is only possible after signing in with Google, and only
-emails configured in the `ALLOWED_EMAILS` environment variable are allowed.
+**Stack:** Go · Svelte · PostgreSQL · Docker · Render
 
-## How authentication works
+---
 
-1. A visitor loads `/`; the Svelte frontend calls `GET /auth/me`.
-2. If there is no valid session, a "Sign in with Google" button is shown.
-   The button points to `GET /auth/login`, which redirects to Google's
-   consent screen.
-3. Google then redirects back to `GET /auth/callback?code=...&state=...`.
-4. The backend exchanges that `code` for an access token (using the official
-   `golang.org/x/oauth2` library), then calls Google's `userinfo` API with
-   that token to obtain the user's verified email.
-   -> This avoids manually decoding/validating a JWT and handling Google's
-   JWKS certificates: the library + HTTPS call to Google's API handle that,
-   reducing surface for errors.
-5. If the email is verified AND present in the allowed email list, a signed session
-   cookie (HMAC-SHA256) is set, valid for 7 days. Otherwise, access is denied
-   (403).
-6. All `/api/*` routes pass through the `requireAuth` middleware, which
-   re-reads and re-validates the cookie on each request (signature,
-   expiration, and that the email is still whitelisted).
+## Features
 
-The cookie is `HttpOnly`, `Secure` (requires HTTPS, so OK on Render), and
-`SameSite=Lax`. It does not contain any Google tokens — only the email,
-expiration, and signature.
+### 💰 Portfolio Tracker
+Track your net worth across all asset classes in one place.
 
-## Create Google credentials (one-time setup)
+- **Asset types:** Real estate, Euro funds, Savings accounts, Crypto, Stock accounts
+- **Stock accounts** (PEA, CTO, AV Bourse…) hold individual positions — each with a ticker and a number of shares
+- **Live prices** fetched daily from Yahoo Finance on first visit, or on demand via a manual refresh button
+- **Dashboard** shows total net worth, a breakdown pie chart by asset type, and a second pie chart showing stock allocation by ticker across all accounts
+- Tickers use Yahoo Finance symbols — append `.PA` for Euronext Paris (e.g. `CW8.PA`), no suffix for US markets (`AAPL`)
 
-1. Go to https://console.cloud.google.com and create or select a project.
-2. **APIs & Services → OAuth consent screen**:
-   - User type: External
-   - Add your email to "Test users" (while the app is unpublished, ONLY test
-     users can sign in — extra safety).
-3. **APIs & Services → Credentials → Create Credentials → OAuth client ID**:
-   - Type: Web application
-   - Authorized redirect URIs: add the exact callback URL
-     (`http://localhost:8080/auth/callback` for local development,
-     `https://your-app.onrender.com/auth/callback` in production).
-4. Retrieve the generated **Client ID** and **Client Secret**.
-
-## Configuration
-
-Copy `.env.example` to `.env` and fill the values:
-
-```bash
-cp .env.example .env
-```
-
-## Run locally (without Docker, for development)
-
-Backend:
-```bash
-cd backend
-export $(cat ../.env | xargs)   # load environment variables
-go mod tidy
-go run .
-```
-
-Frontend (in another terminal, for hot-reload during development):
-```bash
-cd frontend
-npm install
-npm run dev
-```
-Vite dev server runs on a separate port (5173 by default); for development,
-configure a Vite proxy to `localhost:8080` if you want to test the full
-auth flow without rebuilding. For a production-faithful test, prefer the
-Docker method below.
-
-## Build and run with Docker (recommended for prod-like testing)
-
-```bash
-docker build -t hello-auth .
-docker run --rm -p 8080:8080 --env-file .env hello-auth
-```
-
-Visit http://localhost:8080 — you should see the Google sign-in button.
-
-## Deploy on Render
-
-1. Push this project to a GitHub repository.
-2. On Render: New → Web Service → connect your repo.
-3. Render will detect the `Dockerfile` automatically.
-4. In the service's **Environment Variables** on Render, add:
-   - `GOOGLE_CLIENT_ID`
-   - `GOOGLE_CLIENT_SECRET`
-   - `GOOGLE_REDIRECT_URL` → `https://<your-service-name>.onrender.com/auth/callback`
-   - `SESSION_SECRET` → a long random value (e.g. `openssl rand -base64 32`)
-   - `ALLOWED_EMAILS` → comma-separated authorized emails
-5. Go back to Google Cloud Console → Credentials → your OAuth client → add
-   the same `https://<your-service-name>.onrender.com/auth/callback` URL in
-   "Authorized redirect URIs" (Render provides the final URL after first
-   deployment — update it later if needed).
-6. Deploy. Render injects a `PORT` environment variable automatically; the
-   Go server already uses `os.Getenv("PORT")`, so no code changes are needed.
-
-## Configure allowed emails
-
-Set the `ALLOWED_EMAILS` environment variable with a comma-separated list
-of authorized email addresses:
-
-```bash
-ALLOWED_EMAILS=other.email@example.com,other2.email@example.com
-```
-
-Or add it to `.env` / Render environment variables.
-
-Rebuild the image after any modification.
+---
 
 ## Project structure
 
 ```
 .
-├── Dockerfile
-├── .env.example
 ├── backend/
-│   ├── go.mod
-│   ├── main.go      # HTTP routes, auth middleware, static file server
-│   ├── auth.go      # Google OAuth config, code exchange, email whitelist
-│   └── session.go   # signed session cookie creation/validation
+│   ├── main.go                      # Entry point — init + route registration
+│   └── internal/
+│       ├── db/         db.go        # Database connection & migrations
+│       ├── auth/                    # Google OAuth, session cookies, auth middleware
+│       └── portfolio/               # Portfolio feature — models, repo, service, handlers
 └── frontend/
-    ├── package.json
-    ├── vite.config.js
-    ├── index.html
     └── src/
-        ├── main.js
-        └── App.svelte # queries /auth/me, shows login or protected content
+        ├── App.svelte               # Shell — status bar, tab routing
+        ├── Portfolio.svelte         # Portfolio dashboard
+        ├── AssetModal.svelte        # Create / edit asset
+        └── HoldingsModal.svelte     # Manage stock positions within an account
 ```
+
+---
+
+## Local development
+
+**Prerequisites:** Go 1.22+, Node 18+, PostgreSQL
+
+```bash
+# 1. Copy and fill environment variables
+cp .env.example .env
+
+# 2. Backend
+cd backend && go run .
+
+# 3. Frontend (separate terminal)
+cd frontend && npm install && npm run dev
+```
+
+The Vite dev server runs on port 5173 and proxies API calls to the Go backend on port 8080.
+
+---
+
+## Environment variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `DATABASE_URL` | No | PostgreSQL DSN — app runs without it (no persistence) |
+| `GOOGLE_CLIENT_ID` | Yes | OAuth client ID from Google Cloud Console |
+| `GOOGLE_CLIENT_SECRET` | Yes | OAuth client secret |
+| `GOOGLE_REDIRECT_URL` | Yes | Exact callback URL registered in Google Console |
+| `SESSION_SECRET` | Yes | HMAC signing key — generate with `openssl rand -base64 32` |
+| `ALLOWED_EMAILS` | Yes | Comma-separated whitelist of authorized emails |
+| `PORT` | No | HTTP listen port (default `8080`, auto-set by Render) |
+
+---
+
+## Google OAuth setup (one-time)
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com) and create a project.
+2. **APIs & Services → OAuth consent screen** — set user type to External, add your email as a test user.
+3. **Credentials → Create → OAuth client ID** — type: Web application.
+4. Add your redirect URI: `http://localhost:8080/auth/callback` for local dev, `https://your-app.onrender.com/auth/callback` for production.
+5. Copy the Client ID and Secret into `.env`.
+
+---
+
+## Deploy on Render
+
+1. Push to GitHub.
+2. Render → New Web Service → connect repo → it detects the `Dockerfile` automatically.
+3. Add environment variables in the Render dashboard.
+4. Add the Render callback URL to your Google OAuth client's authorized redirect URIs.
