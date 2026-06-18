@@ -104,7 +104,7 @@ func (d *Database) HealthHandler() http.HandlerFunc {
 		// Intentionally minimal response — do not leak internal details.
 		status := `{"status":"ok","db":"disconnected"}`
 		if d.IsConnected() {
-			if err := d.Ping(); err == nil {
+			if err := d.QueryRow("SELECT 1").Scan(new(int)); err == nil {
 				status = `{"status":"ok","db":"connected"}`
 			} else {
 				status = `{"status":"ok","db":"error"}`
