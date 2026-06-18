@@ -35,8 +35,8 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	// /health is protected — DB status is internal information.
-	mux.HandleFunc("/health", auth.RequireAuth(func(w http.ResponseWriter, r *http.Request, _ string) {
+	// /api/status is protected — DB status is internal information.
+	mux.HandleFunc("/api/status", auth.RequireAuth(func(w http.ResponseWriter, r *http.Request, _ string) {
 		database.HealthHandler()(w, r)
 	}))
 

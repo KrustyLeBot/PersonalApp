@@ -30,7 +30,7 @@
 
   async function checkHealth() {
     try {
-      const res = await fetch('/health');
+      const res = await fetch('/api/status');
       const data = await res.json();
       dbStatus = data.db || 'unknown';
     } catch {
