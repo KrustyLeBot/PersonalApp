@@ -11,6 +11,7 @@ import (
 	"helloauth/internal/db"
 	"helloauth/internal/portfolio"
 	"helloauth/internal/projection"
+	"helloauth/internal/telework"
 )
 
 func main() {
@@ -61,6 +62,11 @@ func main() {
 	}
 	// Populate CAGR rates on first boot if none exist yet.
 	go projSvc.BootstrapCAGRs()
+
+	twRepo := telework.NewRepo(database)
+	twSvc := telework.NewService(twRepo)
+	twHandler := telework.NewHandler(twRepo, twSvc)
+	twHandler.RegisterRoutes(mux)
 
 	mux.Handle("/", http.FileServer(http.Dir("./static")))
 

@@ -120,6 +120,30 @@ func (d *Database) Migrate() error {
 				ALTER TABLE projection_rates ADD COLUMN rate_override DECIMAL(8,4) DEFAULT NULL;
 			END IF;
 		END $$;
+
+		CREATE TABLE IF NOT EXISTS telework_preset (
+			id          INTEGER PRIMARY KEY DEFAULT 1,
+			remote_days TEXT NOT NULL DEFAULT '[4,5]',
+			CHECK (id = 1)
+		);
+
+		CREATE TABLE IF NOT EXISTS telework_leaves (
+			leave_date DATE    PRIMARY KEY,
+			year       INTEGER NOT NULL
+		);
+
+		-- Per-day overrides: supersede the weekly preset for a specific date.
+		-- type: 'leave' | 'remote' | 'office'
+		CREATE TABLE IF NOT EXISTS telework_overrides (
+			override_date DATE        PRIMARY KEY,
+			year          INTEGER     NOT NULL,
+			type          VARCHAR(10) NOT NULL CHECK (type IN ('leave','remote','office'))
+		);
+
+		-- Migrate existing leaves into overrides (idempotent).
+		INSERT INTO telework_overrides (override_date, year, type)
+		SELECT leave_date, year, 'leave' FROM telework_leaves
+		ON CONFLICT (override_date) DO NOTHING;
 	`)
 	return err
 }

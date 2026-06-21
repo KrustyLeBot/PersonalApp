@@ -1,6 +1,7 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
   import Portfolio from './Portfolio.svelte';
+  import Telework from './Telework.svelte';
 
   let loading = true;
   let authenticated = false;
@@ -60,7 +61,7 @@
         </span>
         <span class="status-item">
           <span class="dot dot-{dbStatus === 'connected' ? 'green' : dbStatus === 'error' ? 'red' : 'yellow'}"></span>
-          DB: {dbStatus}
+          DB: {{ connected: 'connectée', error: 'erreur', checking: 'vérification…', unreachable: 'inaccessible', unknown: 'inconnu' }[dbStatus] ?? dbStatus}
         </span>
       </div>
       <div class="status-right">
@@ -76,12 +77,20 @@
       >
         Portfolio
       </button>
+      <button
+        class="tab {activeTab === 'telework' ? 'active' : ''}"
+        on:click={() => activeTab = 'telework'}
+      >
+        Télétravail
+      </button>
     </nav>
 
     <!-- Tab content -->
     <main class="content">
       {#if activeTab === 'portfolio'}
         <Portfolio />
+      {:else if activeTab === 'telework'}
+        <Telework />
       {/if}
     </main>
   </div>
