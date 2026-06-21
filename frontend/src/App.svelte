@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import Portfolio from './Portfolio.svelte';
   import Telework from './Telework.svelte';
+  import LolCalendar from './LolCalendar.svelte';
 
   let loading = true;
   let authenticated = false;
@@ -83,6 +84,12 @@
       >
         Télétravail
       </button>
+      <button
+        class="tab {activeTab === 'lol-calendar' ? 'active' : ''}"
+        on:click={() => activeTab = 'lol-calendar'}
+      >
+        Calendrier LoL
+      </button>
     </nav>
 
     <!-- Tab content -->
@@ -91,6 +98,8 @@
         <Portfolio />
       {:else if activeTab === 'telework'}
         <Telework />
+      {:else if activeTab === 'lol-calendar'}
+        <LolCalendar />
       {/if}
     </main>
   </div>

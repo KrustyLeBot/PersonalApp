@@ -403,11 +403,6 @@
   .field-group { display: flex; flex-direction: column; gap: .25rem; font-size: .78rem; color: #64748b; }
   .field-group input { background: #0f172a; border: 1px solid #334155; color: #f1f5f9; border-radius: 5px; padding: .35rem .6rem; font-size: .88rem; width: 100%; box-sizing: border-box; }
   .field-group input:focus { outline: none; border-color: #3b82f6; }
-  .source-field { flex: 1; min-width: 160px; }
-
-  .source-link { color: #60a5fa; font-size: 1rem; text-decoration: none; padding: .35rem .3rem; align-self: flex-end; }
-  .source-link:hover { color: #93c5fd; }
-
   .save-error { color: #f87171; font-size: .78rem; }
 
   .btn-save { align-self: flex-start; background: #1d4ed8; color: #fff; border: none; padding: .4rem .85rem; border-radius: 5px; font-size: .83rem; cursor: pointer; }

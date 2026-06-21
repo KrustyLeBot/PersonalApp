@@ -395,7 +395,6 @@
   {#if loading}
     <div class="tw-loading">Chargement…</div>
   {:else if summary}
-    <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div
       class="calendar-grid"
       class:dragging={dragActive}
@@ -403,6 +402,9 @@
       on:mousedown={onCalendarMouseDown}
       on:mousemove={onCalendarMouseMove}
       on:click={onCalendarClick}
+      on:keydown={() => {}}
+      role="grid"
+      tabindex="0"
     >
       {#each months as mo, mi}
         <div class="month-block">
@@ -445,8 +447,7 @@
 
 <!-- Modal -->
 {#if modalOpen}
-  <!-- svelte-ignore a11y-no-static-element-interactions -->
-  <div class="modal-backdrop" on:click|self={closeModal}>
+  <div class="modal-backdrop" on:click|self={closeModal} on:keydown={() => {}} role="presentation">
     <div class="modal">
       <div class="modal-header">
         <span class="modal-title">{modalTitle()}</span>
@@ -843,12 +844,6 @@
   }
   .modal-select:focus { outline: none; border-color: #3b82f6; }
 
-  .modal-hint {
-    font-size: .78rem;
-    color: #64748b;
-    margin: 0;
-  }
-
   .modal-footer {
     display: flex;
     gap: .6rem;
@@ -868,19 +863,6 @@
   }
   .btn-primary-full:hover { background: #1d4ed8; color: #fff; }
   .btn-primary-full:disabled { opacity: .5; cursor: default; }
-
-  .btn-danger {
-    background: #450a0a;
-    color: #fca5a5;
-    border: 1px solid #7f1d1d;
-    border-radius: 6px;
-    padding: .45rem 1rem;
-    font-size: .9rem;
-    cursor: pointer;
-    font-weight: 500;
-  }
-  .btn-danger:hover { background: #7f1d1d; color: #fff; }
-  .btn-danger:disabled { opacity: .5; cursor: default; }
 
   .btn-cancel {
     background: transparent;
