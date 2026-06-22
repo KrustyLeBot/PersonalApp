@@ -16,7 +16,7 @@ var projectionYears = []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20}
 // categoryReader is a minimal interface so the projection service can read ticker
 // categories without depending on the full portfolio.Repo.
 type categoryReader interface {
-	GetTickerCategories() (map[string]string, error)
+	GetTickerCategories(email string) (map[string]string, error)
 	GetDistinctBourseTickers() ([]string, error)
 }
 
@@ -57,7 +57,7 @@ func categoryKey(category string) string {
 func (s *Service) RefreshTickerCAGRs(tickers []string) {
 	categories := make(map[string]string)
 	if s.portfolioRepo != nil {
-		categories, _ = s.portfolioRepo.GetTickerCategories()
+		categories, _ = s.portfolioRepo.GetTickerCategories("")
 	}
 
 	type fetchResult struct {
@@ -151,10 +151,11 @@ func (s *Service) ComputeProjection(
 	holdings map[int][]portfolio.Holding,
 	prices map[string]float64,
 	dettes map[int]portfolio.DetteInfo,
+	email string,
 ) (*ProjectionSummary, error) {
 	categories, _ := func() (map[string]string, error) {
 		if s.portfolioRepo != nil {
-			return s.portfolioRepo.GetTickerCategories()
+			return s.portfolioRepo.GetTickerCategories(email)
 		}
 		return make(map[string]string), nil
 	}()

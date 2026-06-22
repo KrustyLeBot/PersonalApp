@@ -121,6 +121,22 @@ func (d *Database) Migrate() error {
 			END IF;
 		END $$;
 
+		-- Add user_email to data tables for per-user isolation.
+		DO $$ BEGIN
+			IF NOT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'assets' AND column_name = 'user_email') THEN
+				ALTER TABLE assets ADD COLUMN user_email VARCHAR(255) NOT NULL DEFAULT '';
+				UPDATE assets SET user_email = 'je.bravais@gmail.com' WHERE user_email = '';
+				ALTER TABLE assets ALTER COLUMN user_email DROP DEFAULT;
+			END IF;
+			IF NOT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'ticker_categories' AND column_name = 'user_email') THEN
+				ALTER TABLE ticker_categories DROP CONSTRAINT ticker_categories_pkey;
+				ALTER TABLE ticker_categories ADD COLUMN user_email VARCHAR(255) NOT NULL DEFAULT '';
+				UPDATE ticker_categories SET user_email = 'je.bravais@gmail.com' WHERE user_email = '';
+				ALTER TABLE ticker_categories ALTER COLUMN user_email DROP DEFAULT;
+				ALTER TABLE ticker_categories ADD PRIMARY KEY (ticker, user_email);
+			END IF;
+		END $$;
+
 		CREATE TABLE IF NOT EXISTS telework_preset (
 			id          INTEGER PRIMARY KEY DEFAULT 1,
 			remote_days TEXT NOT NULL DEFAULT '[4,5]',

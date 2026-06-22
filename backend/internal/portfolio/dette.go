@@ -48,15 +48,17 @@ func RemainingCapital(startDate time.Time, durationMonths int, taegPct float64, 
 
 // --- Repo methods ---
 
-// GetAllDettes returns the dette parameters for all dette assets.
-func (r *Repo) GetAllDettes() (map[int]DetteInfo, error) {
+// GetAllDettes returns the dette parameters for all dette assets belonging to the given user.
+func (r *Repo) GetAllDettes(email string) (map[int]DetteInfo, error) {
 	if err := r.requireDB(); err != nil {
 		return nil, err
 	}
 	rows, err := r.db.Query(`
-		SELECT asset_id, start_date, duration_months, taeg, amount_borrowed
-		FROM dette_assets
-	`)
+		SELECT da.asset_id, da.start_date, da.duration_months, da.taeg, da.amount_borrowed
+		FROM dette_assets da
+		JOIN assets a ON a.id = da.asset_id
+		WHERE a.user_email = $1
+	`, email)
 	if err != nil {
 		return nil, err
 	}

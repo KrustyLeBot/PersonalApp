@@ -81,13 +81,13 @@ func (h *Handler) updateRateOverride(w http.ResponseWriter, r *http.Request, _ s
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *Handler) summary(w http.ResponseWriter, r *http.Request, _ string) {
-	assets, err := h.portfolioRepo.GetAllAssets()
+func (h *Handler) summary(w http.ResponseWriter, r *http.Request, email string) {
+	assets, err := h.portfolioRepo.GetAllAssets(email)
 	if err != nil {
 		apiError(w, err, http.StatusInternalServerError)
 		return
 	}
-	holdings, err := h.portfolioRepo.GetAllHoldings()
+	holdings, err := h.portfolioRepo.GetAllHoldings(email)
 	if err != nil {
 		apiError(w, err, http.StatusInternalServerError)
 		return
@@ -97,13 +97,13 @@ func (h *Handler) summary(w http.ResponseWriter, r *http.Request, _ string) {
 		apiError(w, err, http.StatusInternalServerError)
 		return
 	}
-	dettes, err := h.portfolioRepo.GetAllDettes()
+	dettes, err := h.portfolioRepo.GetAllDettes(email)
 	if err != nil {
 		apiError(w, err, http.StatusInternalServerError)
 		return
 	}
 
-	summary, err := h.svc.ComputeProjection(assets, holdings, prices, dettes)
+	summary, err := h.svc.ComputeProjection(assets, holdings, prices, dettes, email)
 	if err != nil {
 		apiError(w, err, http.StatusInternalServerError)
 		return

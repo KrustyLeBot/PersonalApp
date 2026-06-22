@@ -49,8 +49,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 // --- Asset handlers ---
 
-func (h *Handler) listAssets(w http.ResponseWriter, r *http.Request, _ string) {
-	assets, err := h.repo.GetAllAssets()
+func (h *Handler) listAssets(w http.ResponseWriter, r *http.Request, email string) {
+	assets, err := h.repo.GetAllAssets(email)
 	if err != nil {
 		apiError(w, err, http.StatusInternalServerError)
 		return
@@ -58,7 +58,7 @@ func (h *Handler) listAssets(w http.ResponseWriter, r *http.Request, _ string) {
 	jsonOK(w, assets)
 }
 
-func (h *Handler) createAsset(w http.ResponseWriter, r *http.Request, _ string) {
+func (h *Handler) createAsset(w http.ResponseWriter, r *http.Request, email string) {
 	var body struct {
 		Asset
 		Dette *DetteInfo `json:"dette"`
@@ -71,7 +71,7 @@ func (h *Handler) createAsset(w http.ResponseWriter, r *http.Request, _ string) 
 		http.Error(w, "type and name are required", http.StatusBadRequest)
 		return
 	}
-	id, err := h.repo.CreateAsset(body.Asset)
+	id, err := h.repo.CreateAsset(body.Asset, email)
 	if err != nil {
 		apiError(w, err, http.StatusInternalServerError)
 		return
@@ -88,7 +88,7 @@ func (h *Handler) createAsset(w http.ResponseWriter, r *http.Request, _ string) 
 	json.NewEncoder(w).Encode(map[string]int{"id": id})
 }
 
-func (h *Handler) updateAsset(w http.ResponseWriter, r *http.Request, _ string) {
+func (h *Handler) updateAsset(w http.ResponseWriter, r *http.Request, email string) {
 	id, err := pathID(r, "id")
 	if err != nil {
 		http.Error(w, "invalid id", http.StatusBadRequest)
@@ -102,7 +102,7 @@ func (h *Handler) updateAsset(w http.ResponseWriter, r *http.Request, _ string) 
 		http.Error(w, "invalid body", http.StatusBadRequest)
 		return
 	}
-	if err := h.repo.UpdateAsset(id, body.Asset); err != nil {
+	if err := h.repo.UpdateAsset(id, body.Asset, email); err != nil {
 		apiError(w, err, http.StatusInternalServerError)
 		return
 	}
@@ -116,13 +116,13 @@ func (h *Handler) updateAsset(w http.ResponseWriter, r *http.Request, _ string) 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *Handler) deleteAsset(w http.ResponseWriter, r *http.Request, _ string) {
+func (h *Handler) deleteAsset(w http.ResponseWriter, r *http.Request, email string) {
 	id, err := pathID(r, "id")
 	if err != nil {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
-	if err := h.repo.DeleteAsset(id); err != nil {
+	if err := h.repo.DeleteAsset(id, email); err != nil {
 		apiError(w, err, http.StatusInternalServerError)
 		return
 	}
@@ -131,13 +131,13 @@ func (h *Handler) deleteAsset(w http.ResponseWriter, r *http.Request, _ string) 
 
 // --- Holdings handlers ---
 
-func (h *Handler) listHoldings(w http.ResponseWriter, r *http.Request, _ string) {
+func (h *Handler) listHoldings(w http.ResponseWriter, r *http.Request, email string) {
 	assetID, err := pathID(r, "id")
 	if err != nil {
 		http.Error(w, "invalid asset id", http.StatusBadRequest)
 		return
 	}
-	holdings, err := h.repo.GetHoldingsByAsset(assetID)
+	holdings, err := h.repo.GetHoldingsByAsset(assetID, email)
 	if err != nil {
 		apiError(w, err, http.StatusInternalServerError)
 		return
@@ -172,7 +172,7 @@ func (h *Handler) createHolding(w http.ResponseWriter, r *http.Request, _ string
 	json.NewEncoder(w).Encode(map[string]int{"id": id})
 }
 
-func (h *Handler) updateHolding(w http.ResponseWriter, r *http.Request, _ string) {
+func (h *Handler) updateHolding(w http.ResponseWriter, r *http.Request, email string) {
 	id, err := pathID(r, "id")
 	if err != nil {
 		http.Error(w, "invalid id", http.StatusBadRequest)
@@ -184,20 +184,20 @@ func (h *Handler) updateHolding(w http.ResponseWriter, r *http.Request, _ string
 		return
 	}
 	hold.Ticker = strings.ToUpper(strings.TrimSpace(hold.Ticker))
-	if err := h.repo.UpdateHolding(id, hold); err != nil {
+	if err := h.repo.UpdateHolding(id, hold, email); err != nil {
 		apiError(w, err, http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *Handler) deleteHolding(w http.ResponseWriter, r *http.Request, _ string) {
+func (h *Handler) deleteHolding(w http.ResponseWriter, r *http.Request, email string) {
 	id, err := pathID(r, "id")
 	if err != nil {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
-	if err := h.repo.DeleteHolding(id); err != nil {
+	if err := h.repo.DeleteHolding(id, email); err != nil {
 		apiError(w, err, http.StatusInternalServerError)
 		return
 	}
@@ -206,7 +206,7 @@ func (h *Handler) deleteHolding(w http.ResponseWriter, r *http.Request, _ string
 
 // --- Dette handler ---
 
-func (h *Handler) upsertDette(w http.ResponseWriter, r *http.Request, _ string) {
+func (h *Handler) upsertDette(w http.ResponseWriter, r *http.Request, email string) {
 	id, err := pathID(r, "id")
 	if err != nil {
 		http.Error(w, "invalid asset id", http.StatusBadRequest)
@@ -227,7 +227,7 @@ func (h *Handler) upsertDette(w http.ResponseWriter, r *http.Request, _ string) 
 
 // --- Summary + refresh ---
 
-func (h *Handler) upsertCategory(w http.ResponseWriter, r *http.Request, _ string) {
+func (h *Handler) upsertCategory(w http.ResponseWriter, r *http.Request, email string) {
 	ticker := r.PathValue("ticker")
 	var body struct {
 		Category string `json:"category"`
@@ -236,33 +236,33 @@ func (h *Handler) upsertCategory(w http.ResponseWriter, r *http.Request, _ strin
 		http.Error(w, "category is required", http.StatusBadRequest)
 		return
 	}
-	if err := h.repo.UpsertTickerCategory(ticker, strings.TrimSpace(body.Category)); err != nil {
+	if err := h.repo.UpsertTickerCategory(ticker, strings.TrimSpace(body.Category), email); err != nil {
 		apiError(w, err, http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *Handler) deleteCategory(w http.ResponseWriter, r *http.Request, _ string) {
+func (h *Handler) deleteCategory(w http.ResponseWriter, r *http.Request, email string) {
 	ticker := r.PathValue("ticker")
-	if err := h.repo.DeleteTickerCategory(ticker); err != nil {
+	if err := h.repo.DeleteTickerCategory(ticker, email); err != nil {
 		apiError(w, err, http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *Handler) summary(w http.ResponseWriter, r *http.Request, _ string) {
+func (h *Handler) summary(w http.ResponseWriter, r *http.Request, email string) {
 	refreshed, err := h.svc.CheckAndRefreshDaily()
 	if err != nil {
 		log.Printf("daily refresh: %v", err)
 	}
-	assets, err := h.repo.GetAllAssets()
+	assets, err := h.repo.GetAllAssets(email)
 	if err != nil {
 		apiError(w, err, http.StatusInternalServerError)
 		return
 	}
-	holdings, err := h.repo.GetAllHoldings()
+	holdings, err := h.repo.GetAllHoldings(email)
 	if err != nil {
 		apiError(w, err, http.StatusInternalServerError)
 		return
@@ -272,12 +272,12 @@ func (h *Handler) summary(w http.ResponseWriter, r *http.Request, _ string) {
 		apiError(w, err, http.StatusInternalServerError)
 		return
 	}
-	categories, err := h.repo.GetTickerCategories()
+	categories, err := h.repo.GetTickerCategories(email)
 	if err != nil {
 		apiError(w, err, http.StatusInternalServerError)
 		return
 	}
-	dettes, err := h.repo.GetAllDettes()
+	dettes, err := h.repo.GetAllDettes(email)
 	if err != nil {
 		apiError(w, err, http.StatusInternalServerError)
 		return
