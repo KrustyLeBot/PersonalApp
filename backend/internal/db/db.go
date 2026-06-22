@@ -125,22 +125,36 @@ func (d *Database) Migrate() error {
 		DO $$ BEGIN
 			IF NOT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'assets' AND column_name = 'user_email') THEN
 				ALTER TABLE assets ADD COLUMN user_email VARCHAR(255) NOT NULL DEFAULT '';
-				UPDATE assets SET user_email = 'je.bravais@gmail.com' WHERE user_email = '';
 				ALTER TABLE assets ALTER COLUMN user_email DROP DEFAULT;
 			END IF;
 			IF NOT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'ticker_categories' AND column_name = 'user_email') THEN
 				ALTER TABLE ticker_categories DROP CONSTRAINT ticker_categories_pkey;
 				ALTER TABLE ticker_categories ADD COLUMN user_email VARCHAR(255) NOT NULL DEFAULT '';
-				UPDATE ticker_categories SET user_email = 'je.bravais@gmail.com' WHERE user_email = '';
 				ALTER TABLE ticker_categories ALTER COLUMN user_email DROP DEFAULT;
 				ALTER TABLE ticker_categories ADD PRIMARY KEY (ticker, user_email);
 			END IF;
 		END $$;
 
+		-- Migrate telework_preset from singleton (id=1) to per-user (user_email PK).
+		DO $$ BEGIN
+			IF EXISTS (
+				SELECT FROM information_schema.columns
+				WHERE table_name = 'telework_preset' AND column_name = 'id'
+			) AND NOT EXISTS (
+				SELECT FROM information_schema.columns
+				WHERE table_name = 'telework_preset' AND column_name = 'user_email'
+			) THEN
+				ALTER TABLE telework_preset ADD COLUMN user_email VARCHAR(255) NOT NULL DEFAULT '';
+				ALTER TABLE telework_preset DROP CONSTRAINT IF EXISTS telework_preset_pkey;
+				ALTER TABLE telework_preset DROP CONSTRAINT IF EXISTS telework_preset_id_check;
+				ALTER TABLE telework_preset DROP COLUMN id;
+				ALTER TABLE telework_preset ADD PRIMARY KEY (user_email);
+			END IF;
+		END $$;
+
 		CREATE TABLE IF NOT EXISTS telework_preset (
-			id          INTEGER PRIMARY KEY DEFAULT 1,
-			remote_days TEXT NOT NULL DEFAULT '[4,5]',
-			CHECK (id = 1)
+			user_email  VARCHAR(255) PRIMARY KEY,
+			remote_days TEXT NOT NULL DEFAULT '[4,5]'
 		);
 
 		CREATE TABLE IF NOT EXISTS telework_leaves (
@@ -151,23 +165,51 @@ func (d *Database) Migrate() error {
 		-- Per-day overrides: supersede the weekly preset for a specific date.
 		-- type: 'leave' | 'remote' | 'office'
 		CREATE TABLE IF NOT EXISTS telework_overrides (
-			override_date DATE        PRIMARY KEY,
-			year          INTEGER     NOT NULL,
-			type          VARCHAR(10) NOT NULL CHECK (type IN ('leave','remote','office'))
+			override_date DATE         NOT NULL,
+			year          INTEGER      NOT NULL,
+			type          VARCHAR(10)  NOT NULL CHECK (type IN ('leave','remote','office')),
+			user_email    VARCHAR(255) NOT NULL DEFAULT '',
+			PRIMARY KEY (override_date, user_email)
 		);
 
 		-- Migrate existing leaves into overrides (idempotent).
 		INSERT INTO telework_overrides (override_date, year, type)
 		SELECT leave_date, year, 'leave' FROM telework_leaves
-		ON CONFLICT (override_date) DO NOTHING;
+		ON CONFLICT DO NOTHING;
+
+		-- Add user_email to telework_overrides if upgrading from old schema.
+		DO $$ BEGIN
+			IF NOT EXISTS (
+				SELECT FROM information_schema.columns
+				WHERE table_name = 'telework_overrides' AND column_name = 'user_email'
+			) THEN
+				ALTER TABLE telework_overrides DROP CONSTRAINT IF EXISTS telework_overrides_pkey;
+				ALTER TABLE telework_overrides ADD COLUMN user_email VARCHAR(255) NOT NULL DEFAULT '';
+				ALTER TABLE telework_overrides ADD PRIMARY KEY (override_date, user_email);
+			END IF;
+		END $$;
+
+		-- Add user_email to telework_leaves if still used.
+		DO $$ BEGIN
+			IF NOT EXISTS (
+				SELECT FROM information_schema.columns
+				WHERE table_name = 'telework_leaves' AND column_name = 'user_email'
+			) THEN
+				ALTER TABLE telework_leaves DROP CONSTRAINT IF EXISTS telework_leaves_pkey;
+				ALTER TABLE telework_leaves ADD COLUMN user_email VARCHAR(255) NOT NULL DEFAULT '';
+				ALTER TABLE telework_leaves ADD PRIMARY KEY (leave_date, user_email);
+			END IF;
+		END $$;
 
 		CREATE TABLE IF NOT EXISTS lol_leagues (
-			slug       VARCHAR(30) PRIMARY KEY,
-			name       VARCHAR(60) NOT NULL,
-			league_id  VARCHAR(30) NOT NULL,
-			region     VARCHAR(30) NOT NULL DEFAULT '',
-			image_url  TEXT        NOT NULL DEFAULT '',
-			enabled    BOOLEAN     NOT NULL DEFAULT TRUE
+			slug       VARCHAR(30)  NOT NULL,
+			name       VARCHAR(60)  NOT NULL,
+			league_id  VARCHAR(30)  NOT NULL,
+			region     VARCHAR(30)  NOT NULL DEFAULT '',
+			image_url  TEXT         NOT NULL DEFAULT '',
+			enabled    BOOLEAN      NOT NULL DEFAULT TRUE,
+			user_email VARCHAR(255) NOT NULL DEFAULT '',
+			PRIMARY KEY (slug, user_email)
 		);
 
 		-- Add region/image_url to existing deployments.
@@ -180,8 +222,21 @@ func (d *Database) Migrate() error {
 			END IF;
 		END $$;
 
+		-- Add user_email to lol_leagues if upgrading from old schema (PK was slug alone).
+		DO $$ BEGIN
+			IF NOT EXISTS (
+				SELECT FROM information_schema.columns
+				WHERE table_name = 'lol_leagues' AND column_name = 'user_email'
+			) THEN
+				ALTER TABLE lol_leagues DROP CONSTRAINT IF EXISTS lol_leagues_pkey;
+				ALTER TABLE lol_leagues ADD COLUMN user_email VARCHAR(255) NOT NULL DEFAULT '';
+				ALTER TABLE lol_leagues ADD PRIMARY KEY (slug, user_email);
+			END IF;
+		END $$;
+
 		CREATE TABLE IF NOT EXISTS lol_matches (
-			match_id           VARCHAR(30)  PRIMARY KEY,
+			match_id           VARCHAR(30)  NOT NULL,
+			user_email         VARCHAR(255) NOT NULL DEFAULT '',
 			league_name        VARCHAR(30)  NOT NULL,
 			league_slug        VARCHAR(30)  NOT NULL,
 			team1_name         VARCHAR(60),
@@ -200,7 +255,8 @@ func (d *Database) Migrate() error {
 			state              VARCHAR(20)  NOT NULL,
 			is_spoiler         BOOLEAN      NOT NULL DEFAULT FALSE,
 			spoiler_dismissed  BOOLEAN      NOT NULL DEFAULT FALSE,
-			fetched_at         TIMESTAMPTZ  NOT NULL
+			fetched_at         TIMESTAMPTZ  NOT NULL,
+			PRIMARY KEY (match_id, user_email)
 		);
 
 		-- Add spoiler_dismissed to existing deployments.
@@ -210,10 +266,36 @@ func (d *Database) Migrate() error {
 			END IF;
 		END $$;
 
+		-- Add user_email to lol_matches if upgrading from old schema (PK was match_id alone).
+		DO $$ BEGIN
+			IF NOT EXISTS (
+				SELECT FROM information_schema.columns
+				WHERE table_name = 'lol_matches' AND column_name = 'user_email'
+			) THEN
+				ALTER TABLE lol_matches DROP CONSTRAINT IF EXISTS lol_matches_pkey;
+				ALTER TABLE lol_matches ADD COLUMN user_email VARCHAR(255) NOT NULL DEFAULT '';
+				ALTER TABLE lol_matches ADD PRIMARY KEY (match_id, user_email);
+			END IF;
+		END $$;
+
 		CREATE TABLE IF NOT EXISTS lol_daily_refresh (
-			refresh_date DATE        PRIMARY KEY,
-			refreshed_at TIMESTAMPTZ NOT NULL
+			refresh_date DATE         NOT NULL,
+			user_email   VARCHAR(255) NOT NULL DEFAULT '',
+			refreshed_at TIMESTAMPTZ  NOT NULL,
+			PRIMARY KEY (refresh_date, user_email)
 		);
+
+		-- Add user_email to lol_daily_refresh if upgrading from old schema.
+		DO $$ BEGIN
+			IF NOT EXISTS (
+				SELECT FROM information_schema.columns
+				WHERE table_name = 'lol_daily_refresh' AND column_name = 'user_email'
+			) THEN
+				ALTER TABLE lol_daily_refresh DROP CONSTRAINT IF EXISTS lol_daily_refresh_pkey;
+				ALTER TABLE lol_daily_refresh ADD COLUMN user_email VARCHAR(255) NOT NULL DEFAULT '';
+				ALTER TABLE lol_daily_refresh ADD PRIMARY KEY (refresh_date, user_email);
+			END IF;
+		END $$;
 	`)
 	return err
 }

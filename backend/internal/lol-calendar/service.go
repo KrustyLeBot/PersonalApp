@@ -20,12 +20,12 @@ func NewService(repo *Repo, client *Client) *Service {
 	return &Service{repo: repo, client: client}
 }
 
-func (s *Service) CheckAndRefreshDaily() (bool, error) {
-	done, err := s.repo.WasRefreshedToday()
+func (s *Service) CheckAndRefreshDaily(email string) (bool, error) {
+	done, err := s.repo.WasRefreshedToday(email)
 	if err != nil || done {
 		return false, err
 	}
-	return true, s.Refresh()
+	return true, s.Refresh(email)
 }
 
 func (s *Service) FetchAllLeagues() ([]League, error) {
@@ -38,7 +38,7 @@ func (s *Service) FetchVODs(matchID string) ([]GameVOD, error) {
 
 // RefreshLive fetches only a short window around now from Riot and upserts.
 // Throttled to once per minute to avoid hammering the API.
-func (s *Service) RefreshLive() error {
+func (s *Service) RefreshLive(email string) error {
 	s.liveRefreshMu.Lock()
 	if time.Since(s.lastLiveRefresh) < time.Minute {
 		s.liveRefreshMu.Unlock()
@@ -47,7 +47,7 @@ func (s *Service) RefreshLive() error {
 	s.lastLiveRefresh = time.Now()
 	s.liveRefreshMu.Unlock()
 
-	leagueIDs, err := s.repo.GetEnabledLeagueIDs()
+	leagueIDs, err := s.repo.GetEnabledLeagueIDs(email)
 	if err != nil {
 		return err
 	}
@@ -56,11 +56,11 @@ func (s *Service) RefreshLive() error {
 	if err != nil {
 		return err
 	}
-	return s.repo.Upsert(matches)
+	return s.repo.Upsert(matches, email)
 }
 
-func (s *Service) Refresh() error {
-	leagueIDs, err := s.repo.GetEnabledLeagueIDs()
+func (s *Service) Refresh(email string) error {
+	leagueIDs, err := s.repo.GetEnabledLeagueIDs(email)
 	if err != nil {
 		return err
 	}
@@ -68,8 +68,8 @@ func (s *Service) Refresh() error {
 	if err != nil {
 		return err
 	}
-	if err := s.repo.Upsert(matches); err != nil {
+	if err := s.repo.Upsert(matches, email); err != nil {
 		return err
 	}
-	return s.repo.RecordDailyRefresh()
+	return s.repo.RecordDailyRefresh(email)
 }

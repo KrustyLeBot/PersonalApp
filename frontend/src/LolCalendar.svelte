@@ -52,7 +52,7 @@
     try {
       const res = await fetch('/api/lol-calendar/leagues');
       if (!res.ok) return;
-      enabledLeagues = (await res.json()) ?? [];
+      enabledLeagues = ((await res.json()) ?? []).filter(l => l.enabled);
     } catch {}
   }
 

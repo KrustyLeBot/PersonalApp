@@ -34,15 +34,6 @@ type Match struct {
 	FetchedAt        time.Time `json:"fetchedAt"`
 }
 
-// defaultLeagues is the seed list — Riot IDs are stable, enablement is user-configurable.
-var defaultLeagues = []League{
-	{Slug: "worlds",      Name: "Worlds",      LeagueID: "98767975604431411",  Enabled: true},
-	{Slug: "msi",         Name: "MSI",         LeagueID: "98767991325878492",  Enabled: true},
-	{Slug: "first_stand", Name: "First Stand", LeagueID: "113464388705111224", Enabled: true},
-	{Slug: "lec",         Name: "LEC",         LeagueID: "98767991302996019",  Enabled: true},
-	{Slug: "lck",         Name: "LCK",         LeagueID: "98767991310872058",  Enabled: true},
-	{Slug: "lpl",         Name: "LPL",         LeagueID: "98767991314006698",  Enabled: true},
-}
 
 type GameVOD struct {
 	GameNumber int    `json:"gameNumber"`

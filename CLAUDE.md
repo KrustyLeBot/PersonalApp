@@ -9,6 +9,32 @@ Multi-purpose personal web app. Authentication via Google OAuth (single-user whi
 **Every route except `/auth/*` and static files requires a valid session.**
 There are no "partially public" API endpoints. This is enforced at the route registration level in `main.go` via `auth.RequireAuth`. When adding any new route, always wrap it — never inline the auth check.
 
+---
+
+## Fundamental rule: per-user data isolation
+
+**Every feature's data is scoped to the authenticated user's email.**
+All data tables (except global infrastructure like `ticker_prices`, `projection_rates`, `daily_refresh` for portfolio tickers) must have a `user_email VARCHAR(255) NOT NULL` column that is part of the primary key.
+
+**When adding a new feature:**
+1. Every data table must include `user_email VARCHAR(255) NOT NULL` as part of the PK.
+2. All repo methods that read or write user data must accept an `email string` parameter and include `WHERE user_email = $N` (or insert with `user_email = $N`).
+3. Handlers receive `email string` (never `_ string`) and pass it to repo/service methods.
+4. Service methods that call repo methods must accept and propagate `email string`.
+5. Global/shared tables (e.g. `ticker_prices`, `projection_rates`) are the exception — they cache external data shared across users.
+
+**Migration pattern for existing tables:**
+```sql
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'my_table' AND column_name = 'user_email') THEN
+    ALTER TABLE my_table DROP CONSTRAINT IF EXISTS my_table_pkey;
+    ALTER TABLE my_table ADD COLUMN user_email VARCHAR(255) NOT NULL DEFAULT '';
+    UPDATE my_table SET user_email = '' WHERE user_email = '';
+    ALTER TABLE my_table ADD PRIMARY KEY (original_pk_col, user_email);
+  END IF;
+END $$;
+```
+
 The only intentionally public routes are:
 | Route | Reason |
 |---|---|

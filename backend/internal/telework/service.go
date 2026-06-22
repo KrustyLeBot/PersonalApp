@@ -14,14 +14,14 @@ func NewService(repo *Repo) *Service {
 	return &Service{repo: repo}
 }
 
-// ComputeYear builds a YearSummary for the given year.
-func (s *Service) ComputeYear(year int) (YearSummary, error) {
-	preset, err := s.repo.GetPreset()
+// ComputeYear builds a YearSummary for the given year and user.
+func (s *Service) ComputeYear(year int, email string) (YearSummary, error) {
+	preset, err := s.repo.GetPreset(email)
 	if err != nil {
 		return YearSummary{}, err
 	}
 
-	overrides, err := s.repo.GetOverrides(year)
+	overrides, err := s.repo.GetOverrides(year, email)
 	if err != nil {
 		return YearSummary{}, err
 	}

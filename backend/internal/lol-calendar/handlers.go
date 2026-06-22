@@ -29,11 +29,11 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/lol-calendar/refresh-live",            auth.RequireAuth(h.refreshLive))
 }
 
-func (h *Handler) schedule(w http.ResponseWriter, r *http.Request, _ string) {
-	if _, err := h.svc.CheckAndRefreshDaily(); err != nil {
+func (h *Handler) schedule(w http.ResponseWriter, r *http.Request, email string) {
+	if _, err := h.svc.CheckAndRefreshDaily(email); err != nil {
 		log.Printf("lol-calendar daily refresh: %v", err)
 	}
-	matches, err := h.repo.GetSchedule(pastDays)
+	matches, err := h.repo.GetSchedule(pastDays, email)
 	if err != nil {
 		apiError(w, err, http.StatusInternalServerError)
 		return
@@ -43,20 +43,20 @@ func (h *Handler) schedule(w http.ResponseWriter, r *http.Request, _ string) {
 	}
 	jsonOK(w, map[string]any{
 		"matches":     matches,
-		"lastRefresh": h.repo.GetLastRefreshTime(),
+		"lastRefresh": h.repo.GetLastRefreshTime(email),
 	})
 }
 
-func (h *Handler) forceRefresh(w http.ResponseWriter, r *http.Request, _ string) {
-	if err := h.svc.Refresh(); err != nil {
+func (h *Handler) forceRefresh(w http.ResponseWriter, r *http.Request, email string) {
+	if err := h.svc.Refresh(email); err != nil {
 		apiError(w, err, http.StatusInternalServerError)
 		return
 	}
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
-func (h *Handler) listLeagues(w http.ResponseWriter, r *http.Request, _ string) {
-	leagues, err := h.repo.GetLeagues()
+func (h *Handler) listLeagues(w http.ResponseWriter, r *http.Request, email string) {
+	leagues, err := h.repo.GetLeagues(email)
 	if err != nil {
 		apiError(w, err, http.StatusInternalServerError)
 		return
@@ -64,17 +64,17 @@ func (h *Handler) listLeagues(w http.ResponseWriter, r *http.Request, _ string) 
 	jsonOK(w, leagues)
 }
 
-// listAvailableLeagues fetches all 41 leagues from the Riot API and merges
+// listAvailableLeagues fetches all leagues from the Riot API and merges
 // the enabled state from the DB so the frontend can show the full picker.
-func (h *Handler) listAvailableLeagues(w http.ResponseWriter, r *http.Request, _ string) {
+func (h *Handler) listAvailableLeagues(w http.ResponseWriter, r *http.Request, email string) {
 	all, err := h.svc.FetchAllLeagues()
 	if err != nil {
 		apiError(w, err, http.StatusInternalServerError)
 		return
 	}
 
-	// Build a set of enabled slugs from DB.
-	saved, err := h.repo.GetLeagues()
+	// Build a set of enabled slugs from DB for this user.
+	saved, err := h.repo.GetLeagues(email)
 	if err != nil {
 		apiError(w, err, http.StatusInternalServerError)
 		return
@@ -91,7 +91,7 @@ func (h *Handler) listAvailableLeagues(w http.ResponseWriter, r *http.Request, _
 	jsonOK(w, all)
 }
 
-func (h *Handler) updateLeague(w http.ResponseWriter, r *http.Request, _ string) {
+func (h *Handler) updateLeague(w http.ResponseWriter, r *http.Request, email string) {
 	slug := r.PathValue("slug")
 	var body struct {
 		League
@@ -103,16 +103,15 @@ func (h *Handler) updateLeague(w http.ResponseWriter, r *http.Request, _ string)
 	}
 	body.League.Slug = slug
 	body.League.Enabled = body.Enabled
-	// Upsert so leagues not in the seed are persisted on first activation.
-	if err := h.repo.UpsertLeague(body.League); err != nil {
+	if err := h.repo.UpsertLeague(body.League, email); err != nil {
 		apiError(w, err, http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *Handler) liveWindow(w http.ResponseWriter, r *http.Request, _ string) {
-	matches, err := h.repo.GetLiveWindow(liveWindow)
+func (h *Handler) liveWindow(w http.ResponseWriter, r *http.Request, email string) {
+	matches, err := h.repo.GetLiveWindow(liveWindow, email)
 	if err != nil {
 		apiError(w, err, http.StatusInternalServerError)
 		return
@@ -123,8 +122,8 @@ func (h *Handler) liveWindow(w http.ResponseWriter, r *http.Request, _ string) {
 	jsonOK(w, matches)
 }
 
-func (h *Handler) refreshLive(w http.ResponseWriter, r *http.Request, _ string) {
-	if err := h.svc.RefreshLive(); err != nil {
+func (h *Handler) refreshLive(w http.ResponseWriter, r *http.Request, email string) {
+	if err := h.svc.RefreshLive(email); err != nil {
 		apiError(w, err, http.StatusInternalServerError)
 		return
 	}
@@ -144,9 +143,9 @@ func (h *Handler) matchVODs(w http.ResponseWriter, r *http.Request, _ string) {
 	jsonOK(w, vods)
 }
 
-func (h *Handler) dismissSpoiler(w http.ResponseWriter, r *http.Request, _ string) {
+func (h *Handler) dismissSpoiler(w http.ResponseWriter, r *http.Request, email string) {
 	id := r.PathValue("id")
-	if err := h.repo.DismissSpoiler(id); err != nil {
+	if err := h.repo.DismissSpoiler(id, email); err != nil {
 		apiError(w, err, http.StatusInternalServerError)
 		return
 	}

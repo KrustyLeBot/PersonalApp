@@ -70,9 +70,6 @@ func main() {
 	twHandler.RegisterRoutes(mux)
 
 	lolRepo := lolcalendar.NewRepo(database)
-	if err := lolRepo.SeedLeagues(); err != nil {
-		log.Printf("lol-calendar seed leagues: %v", err)
-	}
 	lolSvc := lolcalendar.NewService(lolRepo, lolcalendar.NewClient())
 	lolHandler := lolcalendar.NewHandler(lolRepo, lolSvc)
 	lolHandler.RegisterRoutes(mux)

@@ -16,22 +16,11 @@ func NewRepo(database *db.Database) *Repo {
 
 // --- League config ---
 
-func (r *Repo) SeedLeagues() error {
-	for _, l := range defaultLeagues {
-		_, err := r.db.Exec(`
-			INSERT INTO lol_leagues (slug, name, league_id, enabled)
-			VALUES ($1, $2, $3, $4)
-			ON CONFLICT (slug) DO NOTHING
-		`, l.Slug, l.Name, l.LeagueID, l.Enabled)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (r *Repo) GetLeagues() ([]League, error) {
-	rows, err := r.db.Query(`SELECT slug, name, league_id, COALESCE(region,''), COALESCE(image_url,''), enabled FROM lol_leagues ORDER BY name`)
+func (r *Repo) GetLeagues(email string) ([]League, error) {
+	rows, err := r.db.Query(`
+		SELECT slug, name, league_id, COALESCE(region,''), COALESCE(image_url,''), enabled
+		FROM lol_leagues WHERE user_email = $1 ORDER BY name
+	`, email)
 	if err != nil {
 		return nil, err
 	}
@@ -48,28 +37,23 @@ func (r *Repo) GetLeagues() ([]League, error) {
 	return leagues, rows.Err()
 }
 
-// UpsertLeague inserts or updates a league entry (used when activating a league not yet in DB).
-func (r *Repo) UpsertLeague(l League) error {
+// UpsertLeague inserts or updates a league entry for a user.
+func (r *Repo) UpsertLeague(l League, email string) error {
 	_, err := r.db.Exec(`
-		INSERT INTO lol_leagues (slug, name, league_id, region, image_url, enabled)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		ON CONFLICT (slug) DO UPDATE SET
+		INSERT INTO lol_leagues (slug, name, league_id, region, image_url, enabled, user_email)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		ON CONFLICT (slug, user_email) DO UPDATE SET
 			name      = EXCLUDED.name,
 			league_id = EXCLUDED.league_id,
 			region    = EXCLUDED.region,
 			image_url = EXCLUDED.image_url,
 			enabled   = EXCLUDED.enabled
-	`, l.Slug, l.Name, l.LeagueID, l.Region, l.ImageURL, l.Enabled)
+	`, l.Slug, l.Name, l.LeagueID, l.Region, l.ImageURL, l.Enabled, email)
 	return err
 }
 
-func (r *Repo) SetLeagueEnabled(slug string, enabled bool) error {
-	_, err := r.db.Exec(`UPDATE lol_leagues SET enabled = $1 WHERE slug = $2`, enabled, slug)
-	return err
-}
-
-func (r *Repo) GetEnabledLeagueIDs() ([]string, error) {
-	rows, err := r.db.Query(`SELECT league_id FROM lol_leagues WHERE enabled = TRUE`)
+func (r *Repo) GetEnabledLeagueIDs(email string) ([]string, error) {
+	rows, err := r.db.Query(`SELECT league_id FROM lol_leagues WHERE enabled = TRUE AND user_email = $1`, email)
 	if err != nil {
 		return nil, err
 	}
@@ -88,21 +72,21 @@ func (r *Repo) GetEnabledLeagueIDs() ([]string, error) {
 
 // --- Matches ---
 
-func (r *Repo) Upsert(matches []Match) error {
+func (r *Repo) Upsert(matches []Match, email string) error {
 	for _, m := range matches {
 		_, err := r.db.Exec(`
 			INSERT INTO lol_matches (
-				match_id, league_name, league_slug,
+				match_id, user_email, league_name, league_slug,
 				team1_name, team1_code, team1_image, team1_wins, team1_outcome,
 				team2_name, team2_code, team2_image, team2_wins, team2_outcome,
 				scheduled_at, stage, best_of, state, is_spoiler, fetched_at
 			) VALUES (
-				$1, $2, $3,
-				$4, $5, $6, $7, $8,
-				$9, $10, $11, $12, $13,
-				$14, $15, $16, $17, $18, $19
+				$1, $2, $3, $4,
+				$5, $6, $7, $8, $9,
+				$10, $11, $12, $13, $14,
+				$15, $16, $17, $18, $19, $20
 			)
-			ON CONFLICT (match_id) DO UPDATE SET
+			ON CONFLICT (match_id, user_email) DO UPDATE SET
 				state         = EXCLUDED.state,
 				team1_wins    = EXCLUDED.team1_wins,
 				team1_outcome = EXCLUDED.team1_outcome,
@@ -111,7 +95,7 @@ func (r *Repo) Upsert(matches []Match) error {
 				is_spoiler    = EXCLUDED.is_spoiler,
 				fetched_at    = EXCLUDED.fetched_at
 		`,
-			m.MatchID, m.LeagueName, m.LeagueSlug,
+			m.MatchID, email, m.LeagueName, m.LeagueSlug,
 			m.Team1.Name, m.Team1.Code, m.Team1.ImageURL, m.Team1.GameWins, m.Team1.Outcome,
 			m.Team2.Name, m.Team2.Code, m.Team2.ImageURL, m.Team2.GameWins, m.Team2.Outcome,
 			m.ScheduledAt, m.Stage, m.BestOf, m.State, m.IsSpoiler, m.FetchedAt,
@@ -123,7 +107,7 @@ func (r *Repo) Upsert(matches []Match) error {
 	return nil
 }
 
-func (r *Repo) GetSchedule(pastDays int) ([]Match, error) {
+func (r *Repo) GetSchedule(pastDays int, email string) ([]Match, error) {
 	cutoff := time.Now().UTC().AddDate(0, 0, -pastDays)
 	rows, err := r.db.Query(`
 		SELECT
@@ -132,9 +116,9 @@ func (r *Repo) GetSchedule(pastDays int) ([]Match, error) {
 			team2_name, team2_code, team2_image, team2_wins, team2_outcome,
 			scheduled_at, stage, best_of, state, is_spoiler, spoiler_dismissed, fetched_at
 		FROM lol_matches
-		WHERE scheduled_at >= $1
+		WHERE scheduled_at >= $1 AND user_email = $2
 		ORDER BY scheduled_at ASC
-	`, cutoff)
+	`, cutoff, email)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +142,7 @@ func (r *Repo) GetSchedule(pastDays int) ([]Match, error) {
 }
 
 // GetLiveWindow returns matches scheduled within ±window of now, plus any inProgress matches.
-func (r *Repo) GetLiveWindow(window time.Duration) ([]Match, error) {
+func (r *Repo) GetLiveWindow(window time.Duration, email string) ([]Match, error) {
 	now := time.Now().UTC()
 	from := now.Add(-window)
 	to := now.Add(window)
@@ -169,9 +153,9 @@ func (r *Repo) GetLiveWindow(window time.Duration) ([]Match, error) {
 			team2_name, team2_code, team2_image, team2_wins, team2_outcome,
 			scheduled_at, stage, best_of, state, is_spoiler, spoiler_dismissed, fetched_at
 		FROM lol_matches
-		WHERE state = 'inProgress' OR (scheduled_at >= $1 AND scheduled_at <= $2)
+		WHERE user_email = $1 AND (state = 'inProgress' OR (scheduled_at >= $2 AND scheduled_at <= $3))
 		ORDER BY scheduled_at ASC
-	`, from, to)
+	`, email, from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -194,35 +178,35 @@ func (r *Repo) GetLiveWindow(window time.Duration) ([]Match, error) {
 	return matches, rows.Err()
 }
 
-func (r *Repo) DismissSpoiler(matchID string) error {
-	_, err := r.db.Exec(`UPDATE lol_matches SET spoiler_dismissed = TRUE WHERE match_id = $1`, matchID)
+func (r *Repo) DismissSpoiler(matchID, email string) error {
+	_, err := r.db.Exec(`UPDATE lol_matches SET spoiler_dismissed = TRUE WHERE match_id = $1 AND user_email = $2`, matchID, email)
 	return err
 }
 
 // --- Daily refresh ---
 
-func (r *Repo) WasRefreshedToday() (bool, error) {
+func (r *Repo) WasRefreshedToday(email string) (bool, error) {
 	today := time.Now().UTC().Format("2006-01-02")
 	var count int
-	err := r.db.QueryRow(`SELECT COUNT(*) FROM lol_daily_refresh WHERE refresh_date = $1`, today).Scan(&count)
+	err := r.db.QueryRow(`SELECT COUNT(*) FROM lol_daily_refresh WHERE refresh_date = $1 AND user_email = $2`, today, email).Scan(&count)
 	return count > 0, err
 }
 
-func (r *Repo) GetLastRefreshTime() *string {
+func (r *Repo) GetLastRefreshTime(email string) *string {
 	var ts string
-	err := r.db.QueryRow(`SELECT refreshed_at FROM lol_daily_refresh ORDER BY refresh_date DESC LIMIT 1`).Scan(&ts)
+	err := r.db.QueryRow(`SELECT refreshed_at FROM lol_daily_refresh WHERE user_email = $1 ORDER BY refresh_date DESC LIMIT 1`, email).Scan(&ts)
 	if err != nil {
 		return nil
 	}
 	return &ts
 }
 
-func (r *Repo) RecordDailyRefresh() error {
+func (r *Repo) RecordDailyRefresh(email string) error {
 	today := time.Now().UTC().Format("2006-01-02")
 	_, err := r.db.Exec(`
-		INSERT INTO lol_daily_refresh (refresh_date, refreshed_at)
-		VALUES ($1, NOW())
-		ON CONFLICT (refresh_date) DO UPDATE SET refreshed_at = NOW()
-	`, today)
+		INSERT INTO lol_daily_refresh (refresh_date, user_email, refreshed_at)
+		VALUES ($1, $2, NOW())
+		ON CONFLICT (refresh_date, user_email) DO UPDATE SET refreshed_at = NOW()
+	`, today, email)
 	return err
 }

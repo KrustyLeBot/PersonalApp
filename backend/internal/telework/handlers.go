@@ -28,13 +28,13 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/telework/overrides/{year}", auth.RequireAuth(h.bulkSetOverrides))
 }
 
-func (h *Handler) summary(w http.ResponseWriter, r *http.Request, _ string) {
+func (h *Handler) summary(w http.ResponseWriter, r *http.Request, email string) {
 	year, err := pathYear(r)
 	if err != nil {
 		http.Error(w, "invalid year", http.StatusBadRequest)
 		return
 	}
-	summary, err := h.svc.ComputeYear(year)
+	summary, err := h.svc.ComputeYear(year, email)
 	if err != nil {
 		apiError(w, err, http.StatusInternalServerError)
 		return
@@ -42,8 +42,8 @@ func (h *Handler) summary(w http.ResponseWriter, r *http.Request, _ string) {
 	jsonOK(w, summary)
 }
 
-func (h *Handler) getPreset(w http.ResponseWriter, r *http.Request, _ string) {
-	p, err := h.repo.GetPreset()
+func (h *Handler) getPreset(w http.ResponseWriter, r *http.Request, email string) {
+	p, err := h.repo.GetPreset(email)
 	if err != nil {
 		apiError(w, err, http.StatusInternalServerError)
 		return
@@ -51,26 +51,26 @@ func (h *Handler) getPreset(w http.ResponseWriter, r *http.Request, _ string) {
 	jsonOK(w, p)
 }
 
-func (h *Handler) savePreset(w http.ResponseWriter, r *http.Request, _ string) {
+func (h *Handler) savePreset(w http.ResponseWriter, r *http.Request, email string) {
 	var p Preset
 	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
 		http.Error(w, "invalid body", http.StatusBadRequest)
 		return
 	}
-	if err := h.repo.SavePreset(p); err != nil {
+	if err := h.repo.SavePreset(p, email); err != nil {
 		apiError(w, err, http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *Handler) getOverrides(w http.ResponseWriter, r *http.Request, _ string) {
+func (h *Handler) getOverrides(w http.ResponseWriter, r *http.Request, email string) {
 	year, err := pathYear(r)
 	if err != nil {
 		http.Error(w, "invalid year", http.StatusBadRequest)
 		return
 	}
-	overrides, err := h.repo.GetOverrides(year)
+	overrides, err := h.repo.GetOverrides(year, email)
 	if err != nil {
 		apiError(w, err, http.StatusInternalServerError)
 		return
@@ -79,7 +79,7 @@ func (h *Handler) getOverrides(w http.ResponseWriter, r *http.Request, _ string)
 }
 
 // bulkSetOverrides accepts a JSON object mapping YYYY-MM-DD → type ("leave"|"remote"|"office").
-func (h *Handler) bulkSetOverrides(w http.ResponseWriter, r *http.Request, _ string) {
+func (h *Handler) bulkSetOverrides(w http.ResponseWriter, r *http.Request, email string) {
 	year, err := pathYear(r)
 	if err != nil {
 		http.Error(w, "invalid year", http.StatusBadRequest)
@@ -97,7 +97,7 @@ func (h *Handler) bulkSetOverrides(w http.ResponseWriter, r *http.Request, _ str
 			return
 		}
 	}
-	if err := h.repo.BulkSetOverrides(year, overrides); err != nil {
+	if err := h.repo.BulkSetOverrides(year, overrides, email); err != nil {
 		apiError(w, err, http.StatusInternalServerError)
 		return
 	}
