@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import Live from './f1/Live.svelte';
 
   let races = [];
   let drivers = [];
@@ -166,6 +167,34 @@
   $: upcomingRaces = races.filter(r => !r.isPast);
   $: nextRace = upcomingRaces[0] ?? null;
 
+  // A race is "live" if now is within the race window. raceTime is UTC ("HH:MM:SS"
+  // or ""); we open a generous window [start-1h, start+4h] to cover the whole event.
+  function isRaceLive(race) {
+    if (!race) return false;
+    const datePart = (race.raceDate ?? '').slice(0, 10);
+    if (!datePart) return false;
+    const timePart = race.raceTime && race.raceTime.length >= 5 ? race.raceTime.slice(0, 8) : '13:00:00';
+    const start = new Date(`${datePart}T${timePart}Z`).getTime();
+    if (Number.isNaN(start)) return false;
+    const now = Date.now();
+    return now >= start - 3600_000 && now <= start + 4 * 3600_000;
+  }
+
+  // The live race is the next upcoming race if it's currently within its window.
+  $: liveRace = isRaceLive(nextRace) ? nextRace : null;
+
+  // Auto-switch to the Live tab once, on first load, if a race is in progress —
+  // so opening the page during a GP lands straight on the live view.
+  let autoSwitched = false;
+  $: if (liveRace && !autoSwitched) {
+    autoSwitched = true;
+    subTab = 'live';
+  }
+
+  // Demo mode flag: when no race is live, the user can still preview the live UI
+  // with the last finished session's static data.
+  let showDemo = false;
+
   function positionLabel(pos) {
     if (pos === 1) return '🥇';
     if (pos === 2) return '🥈';
@@ -193,6 +222,11 @@
 
   <!-- Sub-tabs -->
   <div class="subtabbar">
+    {#if liveRace}
+      <button class="subtab live-tab {subTab === 'live' ? 'active' : ''}" on:click={() => subTab = 'live'}>
+        <span class="live-dot"></span> Live
+      </button>
+    {/if}
     <button class="subtab {subTab === 'calendar' ? 'active' : ''}" on:click={() => subTab = 'calendar'}>
       Calendrier
     </button>
@@ -205,6 +239,11 @@
     <div class="state-msg">Chargement…</div>
   {:else if error}
     <div class="state-msg error">{error}</div>
+  {:else if subTab === 'live' && liveRace}
+
+    <!-- ── LIVE TAB ── -->
+    <Live demo={false} />
+
   {:else if subTab === 'calendar'}
 
     <!-- ── CALENDAR TAB ── -->
@@ -374,6 +413,19 @@
           {/each}
         {/if}
 
+        <!-- Live UI preview (static): demo with the last finished session's data -->
+        <div class="demo-section">
+          <div class="section-label">Aperçu live (démo)</div>
+          {#if showDemo}
+            <Live demo={true} />
+            <button class="btn-demo" on:click={() => showDemo = false}>Masquer l'aperçu</button>
+          {:else}
+            <button class="btn-demo" on:click={() => showDemo = true}>
+              Afficher un aperçu de l'interface live (dernière course)
+            </button>
+          {/if}
+        </div>
+
       </div>
     </div>
 
@@ -475,6 +527,22 @@
   }
   .subtab:hover { color: #f1f5f9; }
   .subtab.active { color: #e10600; border-bottom-color: #e10600; }
+  .live-tab { display: flex; align-items: center; gap: .4rem; color: #fca5a5; }
+  .live-dot {
+    width: 8px; height: 8px; border-radius: 50%; background: #ef4444;
+    animation: live-pulse 1.4s infinite;
+  }
+  @keyframes live-pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+
+  /* Demo preview */
+  .demo-section { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px dashed #334155; }
+  .btn-demo {
+    width: 100%; margin-top: .5rem;
+    background: #1e293b; border: 1px solid #334155; color: #94a3b8;
+    padding: .6rem 1rem; border-radius: 8px; font-size: .85rem; cursor: pointer;
+    transition: background .15s, color .15s;
+  }
+  .btn-demo:hover { background: #263247; color: #f1f5f9; }
 
   /* Section labels */
   .section-label {
