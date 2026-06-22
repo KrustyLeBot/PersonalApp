@@ -41,7 +41,7 @@
   async function load() {
     loading = true; error = '';
     try {
-      const res = await fetch('/api/projection/summary');
+      const res = await fetch('/api/portfolio/projection/summary');
       if (!res.ok) throw new Error(await res.text());
       data = await res.json();
       editableRates = Object.fromEntries(
@@ -74,7 +74,7 @@
     try {
       const raw = overrideRates[key];
       const rate = raw === '' ? null : parseFloat(raw);
-      const res = await fetch(`/api/projection/rates/${encodeURIComponent(key)}/rate-override`, {
+      const res = await fetch(`/api/portfolio/projection/rates/${encodeURIComponent(key)}/rate-override`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rate }),
@@ -93,7 +93,7 @@
     saving[key] = true; saving = saving;
     saveError[key] = ''; saveError = saveError;
     try {
-      const res = await fetch(`/api/projection/rates/${encodeURIComponent(key)}`, {
+      const res = await fetch(`/api/portfolio/projection/rates/${encodeURIComponent(key)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editableRates[key]),

@@ -296,6 +296,94 @@ func (d *Database) Migrate() error {
 				ALTER TABLE lol_daily_refresh ADD PRIMARY KEY (refresh_date, user_email);
 			END IF;
 		END $$;
+
+		CREATE TABLE IF NOT EXISTS f1_races (
+			season       INT          NOT NULL,
+			round        INT          NOT NULL,
+			race_name    VARCHAR(100) NOT NULL,
+			circuit_id   VARCHAR(50),
+			circuit_name VARCHAR(100),
+			locality     VARCHAR(100),
+			country      VARCHAR(100),
+			race_date    DATE         NOT NULL,
+			race_time    TIME,
+			fetched_at   TIMESTAMPTZ  NOT NULL,
+			PRIMARY KEY (season, round)
+		);
+
+		CREATE TABLE IF NOT EXISTS f1_race_results (
+			season             INT          NOT NULL,
+			round              INT          NOT NULL,
+			position           INT,
+			driver_id          VARCHAR(50)  NOT NULL,
+			driver_code        VARCHAR(5),
+			driver_given_name  VARCHAR(50),
+			driver_family_name VARCHAR(50),
+			constructor_id     VARCHAR(50)  NOT NULL,
+			constructor_name   VARCHAR(100) NOT NULL,
+			grid               INT,
+			laps               INT,
+			points             NUMERIC(5,1),
+			status             VARCHAR(50),
+			fastest_lap_rank   INT,
+			fastest_lap_time   VARCHAR(20),
+			fetched_at         TIMESTAMPTZ  NOT NULL,
+			PRIMARY KEY (season, round, driver_id),
+			FOREIGN KEY (season, round) REFERENCES f1_races(season, round)
+		);
+
+		CREATE TABLE IF NOT EXISTS f1_driver_standings (
+			season             INT          NOT NULL,
+			driver_id          VARCHAR(50)  NOT NULL,
+			driver_code        VARCHAR(5),
+			driver_given_name  VARCHAR(50),
+			driver_family_name VARCHAR(50),
+			constructor_name   VARCHAR(100),
+			position           INT          NOT NULL,
+			points             NUMERIC(6,1) NOT NULL,
+			wins               INT          DEFAULT 0,
+			updated_at         TIMESTAMPTZ  NOT NULL,
+			PRIMARY KEY (season, driver_id)
+		);
+
+		CREATE TABLE IF NOT EXISTS f1_constructor_standings (
+			season           INT          NOT NULL,
+			constructor_id   VARCHAR(50)  NOT NULL,
+			constructor_name VARCHAR(100) NOT NULL,
+			position         INT          NOT NULL,
+			points           NUMERIC(6,1) NOT NULL,
+			wins             INT          DEFAULT 0,
+			updated_at       TIMESTAMPTZ  NOT NULL,
+			PRIMARY KEY (season, constructor_id)
+		);
+
+		CREATE TABLE IF NOT EXISTS f1_qualifying_results (
+			season             INT          NOT NULL,
+			round              INT          NOT NULL,
+			position           INT          NOT NULL,
+			driver_id          VARCHAR(50)  NOT NULL,
+			driver_code        VARCHAR(5),
+			driver_given_name  VARCHAR(50),
+			driver_family_name VARCHAR(50),
+			constructor_id     VARCHAR(50)  NOT NULL,
+			constructor_name   VARCHAR(100) NOT NULL,
+			q1                 VARCHAR(20),
+			q2                 VARCHAR(20),
+			q3                 VARCHAR(20),
+			fetched_at         TIMESTAMPTZ  NOT NULL,
+			PRIMARY KEY (season, round, driver_id),
+			FOREIGN KEY (season, round) REFERENCES f1_races(season, round)
+		);
+
+		CREATE TABLE IF NOT EXISTS f1_daily_refresh (
+			refresh_date DATE        NOT NULL PRIMARY KEY,
+			refreshed_at TIMESTAMPTZ NOT NULL
+		);
+
+		CREATE TABLE IF NOT EXISTS user_settings (
+			user_email        VARCHAR(255) PRIMARY KEY,
+			enabled_features  TEXT         NOT NULL DEFAULT '[]'
+		);
 	`)
 	return err
 }

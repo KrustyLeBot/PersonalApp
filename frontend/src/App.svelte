@@ -3,13 +3,16 @@
   import Portfolio from './Portfolio.svelte';
   import Telework from './Telework.svelte';
   import LolCalendar from './LolCalendar.svelte';
+  import F1 from './F1.svelte';
+  import Settings from './Settings.svelte';
 
   let loading = true;
   let authenticated = false;
   let email = '';
   let dbStatus = 'checking';
-  let activeTab = 'portfolio';
+  let activeTab = 'settings';
   let healthInterval;
+  let enabledFeatures = [];
 
   onMount(async () => {
     try {
@@ -19,16 +22,33 @@
       email = data.email || '';
     } catch {
       // server unreachable
-    } finally {
-      loading = false;
     }
+
     if (authenticated) {
+      await loadFeatures();
       await checkHealth();
       healthInterval = setInterval(checkHealth, 30000);
     }
+
+    loading = false;
   });
 
   onDestroy(() => clearInterval(healthInterval));
+
+  async function loadFeatures() {
+    try {
+      const res = await fetch('/api/settings/features');
+      if (res.ok) {
+        const data = await res.json();
+        enabledFeatures = data.enabled ?? [];
+        if (enabledFeatures.length > 0) {
+          activeTab = enabledFeatures[0];
+        }
+      }
+    } catch {
+      enabledFeatures = [];
+    }
+  }
 
   async function checkHealth() {
     try {
@@ -39,6 +59,20 @@
       dbStatus = 'unreachable';
     }
   }
+
+  function onFeaturesChanged(event) {
+    enabledFeatures = event.detail.enabled;
+    if (activeTab !== 'settings' && !enabledFeatures.includes(activeTab)) {
+      activeTab = 'settings';
+    }
+  }
+
+  const FEATURE_LABELS = {
+    portfolio:      'Portfolio',
+    telework:       'Télétravail',
+    'lol-calendar': 'Calendrier LoL',
+    f1:             'F1',
+  };
 </script>
 
 {#if loading}
@@ -72,23 +106,19 @@
 
     <!-- Tab bar -->
     <nav class="tabbar">
+      {#each enabledFeatures as id}
+        <button
+          class="tab {activeTab === id ? 'active' : ''}"
+          on:click={() => activeTab = id}
+        >
+          {FEATURE_LABELS[id] ?? id}
+        </button>
+      {/each}
       <button
-        class="tab {activeTab === 'portfolio' ? 'active' : ''}"
-        on:click={() => activeTab = 'portfolio'}
+        class="tab {activeTab === 'settings' ? 'active' : ''}"
+        on:click={() => activeTab = 'settings'}
       >
-        Portfolio
-      </button>
-      <button
-        class="tab {activeTab === 'telework' ? 'active' : ''}"
-        on:click={() => activeTab = 'telework'}
-      >
-        Télétravail
-      </button>
-      <button
-        class="tab {activeTab === 'lol-calendar' ? 'active' : ''}"
-        on:click={() => activeTab = 'lol-calendar'}
-      >
-        Calendrier LoL
+        ⚙ Paramètres
       </button>
     </nav>
 
@@ -100,6 +130,10 @@
         <Telework />
       {:else if activeTab === 'lol-calendar'}
         <LolCalendar />
+      {:else if activeTab === 'f1'}
+        <F1 />
+      {:else if activeTab === 'settings'}
+        <Settings {enabledFeatures} on:change={onFeaturesChanged} />
       {/if}
     </main>
   </div>

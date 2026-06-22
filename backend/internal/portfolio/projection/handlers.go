@@ -9,7 +9,7 @@ import (
 	"helloauth/internal/portfolio"
 )
 
-// Handler exposes HTTP handlers for the /api/projection/* routes.
+// Handler exposes HTTP handlers for the /api/portfolio/projection/* routes.
 type Handler struct {
 	repo          *Repo
 	svc           *Service
@@ -22,10 +22,10 @@ func NewHandler(repo *Repo, svc *Service, portfolioRepo *portfolio.Repo) *Handle
 
 // RegisterRoutes attaches all projection routes to mux.
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/projection/rates",                       auth.RequireAuth(h.listRates))
-	mux.HandleFunc("PUT /api/projection/rates/{key}",                 auth.RequireAuth(h.updateRate))
-	mux.HandleFunc("PUT /api/projection/rates/{key}/rate-override",   auth.RequireAuth(h.updateRateOverride))
-	mux.HandleFunc("GET /api/projection/summary",                     auth.RequireAuth(h.summary))
+	mux.HandleFunc("GET /api/portfolio/projection/rates",                       auth.RequireAuth(h.listRates))
+	mux.HandleFunc("PUT /api/portfolio/projection/rates/{key}",                 auth.RequireAuth(h.updateRate))
+	mux.HandleFunc("PUT /api/portfolio/projection/rates/{key}/rate-override",   auth.RequireAuth(h.updateRateOverride))
+	mux.HandleFunc("GET /api/portfolio/projection/summary",                     auth.RequireAuth(h.summary))
 }
 
 func (h *Handler) listRates(w http.ResponseWriter, r *http.Request, _ string) {

@@ -9,9 +9,11 @@ import (
 
 	"helloauth/internal/auth"
 	"helloauth/internal/db"
+	"helloauth/internal/f1"
 	lolcalendar "helloauth/internal/lol-calendar"
 	"helloauth/internal/portfolio"
-	"helloauth/internal/projection"
+	"helloauth/internal/portfolio/projection"
+	"helloauth/internal/settings"
 	"helloauth/internal/telework"
 )
 
@@ -73,6 +75,15 @@ func main() {
 	lolSvc := lolcalendar.NewService(lolRepo, lolcalendar.NewClient())
 	lolHandler := lolcalendar.NewHandler(lolRepo, lolSvc)
 	lolHandler.RegisterRoutes(mux)
+
+	f1Repo := f1.NewRepo(database)
+	f1Svc := f1.NewService(f1Repo, f1.NewClient())
+	f1Handler := f1.NewHandler(f1Repo, f1Svc)
+	f1Handler.RegisterRoutes(mux)
+
+	settingsRepo := settings.NewRepo(database)
+	settingsHandler := settings.NewHandler(settingsRepo)
+	settingsHandler.RegisterRoutes(mux)
 
 	mux.Handle("/", http.FileServer(http.Dir("./static")))
 
