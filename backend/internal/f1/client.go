@@ -60,6 +60,11 @@ func (c *Client) FetchSeason(year int) ([]Race, error) {
 			Country:     r.Circuit.Location.Country,
 			RaceDate:    r.Date,
 			RaceTime:    r.Time,
+			QualiDate:   r.Qualifying.Date,
+			QualiTime:   r.Qualifying.Time,
+			SprintDate:  r.Sprint.Date,
+			SprintTime:  r.Sprint.Time,
+			HasSprint:   r.Sprint.Date != "",
 		})
 	}
 	return races, nil

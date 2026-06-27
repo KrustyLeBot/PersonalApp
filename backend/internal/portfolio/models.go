@@ -56,7 +56,6 @@ type Summary struct {
 	TickerPrices      map[string]float64 `json:"ticker_prices"`
 	TickerCategories  map[string]string  `json:"ticker_categories"`  // ticker → category label
 	LastRefresh       *string            `json:"last_refresh"`
-	RefreshedToday    bool               `json:"refreshed_today"`
 }
 
 // DetteInfo holds the loan parameters for a dette asset.

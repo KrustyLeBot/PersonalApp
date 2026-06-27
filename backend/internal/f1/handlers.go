@@ -27,10 +27,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 }
 
 func (h *Handler) standings(w http.ResponseWriter, r *http.Request, _ string) {
-	if _, err := h.svc.CheckAndRefreshDaily(); err != nil {
-		log.Printf("f1 daily refresh: %v", err)
-	}
-
+	// Daily refresh is driven by the frontend (POST /refresh) so this GET returns
+	// cached data instantly — see "Daily-refresh pages" in CLAUDE.md.
 	year := currentSeason()
 	drivers, err := h.repo.GetDriverStandings(year)
 	if err != nil {
@@ -57,10 +55,6 @@ func (h *Handler) standings(w http.ResponseWriter, r *http.Request, _ string) {
 }
 
 func (h *Handler) races(w http.ResponseWriter, r *http.Request, _ string) {
-	if _, err := h.svc.CheckAndRefreshDaily(); err != nil {
-		log.Printf("f1 daily refresh: %v", err)
-	}
-
 	year := currentSeason()
 	races, err := h.repo.GetRaces(year)
 	if err != nil {

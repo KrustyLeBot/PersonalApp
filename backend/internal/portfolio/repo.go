@@ -301,18 +301,6 @@ func (r *Repo) DeleteTickerCategory(ticker, email string) error {
 
 // --- Daily refresh ---
 
-func (r *Repo) WasRefreshedToday() (bool, error) {
-	if err := r.requireDB(); err != nil {
-		return false, err
-	}
-	var count int
-	err := r.db.QueryRow(
-		`SELECT COUNT(*) FROM daily_refresh WHERE refresh_date = $1`,
-		time.Now().Format("2006-01-02"),
-	).Scan(&count)
-	return count > 0, err
-}
-
 func (r *Repo) RecordDailyRefresh() error {
 	if err := r.requireDB(); err != nil {
 		return err

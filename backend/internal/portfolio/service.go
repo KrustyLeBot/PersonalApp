@@ -46,16 +46,6 @@ func (s *Service) RefreshTickers() error {
 	return s.repo.RecordDailyRefresh()
 }
 
-// CheckAndRefreshDaily triggers RefreshTickers only if it has not run today.
-// Returns true if a refresh was actually performed.
-func (s *Service) CheckAndRefreshDaily() (bool, error) {
-	done, err := s.repo.WasRefreshedToday()
-	if err != nil || done {
-		return false, err
-	}
-	return true, s.RefreshTickers()
-}
-
 // ComputeSummary aggregates assets, holdings, prices, categories, and dettes into a Summary.
 // ByCategory groups ticker positions by their assigned category label; tickers
 // without a category fall back to the ticker symbol itself.
@@ -66,7 +56,6 @@ func (s *Service) ComputeSummary(
 	categories map[string]string,
 	dettes map[int]DetteInfo,
 	lastRefresh *string,
-	refreshedToday bool,
 ) Summary {
 	byType := make(map[string]float64)
 	byCategory := make(map[string]float64)
@@ -114,6 +103,5 @@ func (s *Service) ComputeSummary(
 		TickerPrices:     prices,
 		TickerCategories: categories,
 		LastRefresh:      lastRefresh,
-		RefreshedToday:   refreshedToday,
 	}
 }

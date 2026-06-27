@@ -20,14 +20,6 @@ func NewService(repo *Repo, client *Client) *Service {
 	return &Service{repo: repo, client: client}
 }
 
-func (s *Service) CheckAndRefreshDaily(email string) (bool, error) {
-	done, err := s.repo.WasRefreshedToday(email)
-	if err != nil || done {
-		return false, err
-	}
-	return true, s.Refresh(email)
-}
-
 func (s *Service) FetchAllLeagues() ([]League, error) {
 	return s.client.FetchAllLeagues()
 }

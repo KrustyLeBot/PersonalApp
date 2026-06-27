@@ -18,15 +18,6 @@ func currentSeason() int {
 	return time.Now().UTC().Year()
 }
 
-// CheckAndRefreshDaily triggers a full refresh if it hasn't happened today.
-// Returns true if a refresh was performed.
-func (s *Service) CheckAndRefreshDaily() (bool, error) {
-	done, err := s.repo.WasRefreshedToday()
-	if err != nil || done {
-		return false, err
-	}
-	return true, s.Refresh()
-}
 
 // Refresh fetches season schedule, standings and any missing race results.
 func (s *Service) Refresh() error {

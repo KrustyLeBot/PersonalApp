@@ -12,6 +12,11 @@ type Race struct {
 	Country     string     `json:"country"`
 	RaceDate    string     `json:"raceDate"` // YYYY-MM-DD
 	RaceTime    string     `json:"raceTime"` // HH:MM:SS or ""
+	QualiDate   string     `json:"qualiDate"`  // YYYY-MM-DD or ""
+	QualiTime   string     `json:"qualiTime"`  // HH:MM:SS or ""
+	SprintDate  string     `json:"sprintDate"` // YYYY-MM-DD or ""
+	SprintTime  string     `json:"sprintTime"` // HH:MM:SS or ""
+	HasSprint   bool       `json:"hasSprint"`
 	IsPast      bool       `json:"isPast"`
 	FetchedAt   time.Time  `json:"fetchedAt"`
 }
@@ -123,6 +128,16 @@ type apiRace struct {
 	Date    string       `json:"date"`
 	Time    string       `json:"time"`
 	Results []apiResult  `json:"Results"`
+
+	// Optional weekend sessions present in the season schedule payload.
+	Qualifying struct {
+		Date string `json:"date"`
+		Time string `json:"time"`
+	} `json:"Qualifying"`
+	Sprint struct {
+		Date string `json:"date"`
+		Time string `json:"time"`
+	} `json:"Sprint"`
 }
 
 type apiResultsResponse struct {

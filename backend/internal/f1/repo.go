@@ -20,8 +20,9 @@ func NewRepo(database *db.Database) *Repo {
 func (r *Repo) UpsertRaces(races []Race) error {
 	for _, race := range races {
 		_, err := r.db.Exec(`
-			INSERT INTO f1_races (season, round, race_name, circuit_id, circuit_name, locality, country, race_date, race_time, fetched_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+			INSERT INTO f1_races (season, round, race_name, circuit_id, circuit_name, locality, country,
+			                      race_date, race_time, quali_date, quali_time, sprint_date, sprint_time, fetched_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
 			ON CONFLICT (season, round) DO UPDATE SET
 				race_name    = EXCLUDED.race_name,
 				circuit_id   = EXCLUDED.circuit_id,
@@ -30,9 +31,15 @@ func (r *Repo) UpsertRaces(races []Race) error {
 				country      = EXCLUDED.country,
 				race_date    = EXCLUDED.race_date,
 				race_time    = EXCLUDED.race_time,
+				quali_date   = EXCLUDED.quali_date,
+				quali_time   = EXCLUDED.quali_time,
+				sprint_date  = EXCLUDED.sprint_date,
+				sprint_time  = EXCLUDED.sprint_time,
 				fetched_at   = EXCLUDED.fetched_at
 		`, race.Season, race.Round, race.RaceName, race.CircuitID, race.CircuitName,
-			race.Locality, race.Country, race.RaceDate, nullableTime(race.RaceTime))
+			race.Locality, race.Country, race.RaceDate, nullableTime(race.RaceTime),
+			nullableDate(race.QualiDate), nullableTime(race.QualiTime),
+			nullableDate(race.SprintDate), nullableTime(race.SprintTime))
 		if err != nil {
 			return err
 		}
@@ -43,7 +50,10 @@ func (r *Repo) UpsertRaces(races []Race) error {
 func (r *Repo) GetRaces(season int) ([]Race, error) {
 	rows, err := r.db.Query(`
 		SELECT season, round, race_name, circuit_id, circuit_name, locality, country,
-		       to_char(race_date, 'YYYY-MM-DD'), COALESCE(race_time::text, ''), fetched_at
+		       to_char(race_date, 'YYYY-MM-DD'), COALESCE(race_time::text, ''),
+		       COALESCE(to_char(quali_date, 'YYYY-MM-DD'), ''), COALESCE(quali_time::text, ''),
+		       COALESCE(to_char(sprint_date, 'YYYY-MM-DD'), ''), COALESCE(sprint_time::text, ''),
+		       fetched_at
 		FROM f1_races
 		WHERE season = $1
 		ORDER BY round ASC
@@ -60,10 +70,12 @@ func (r *Repo) GetRaces(season int) ([]Race, error) {
 		var fetchedAt time.Time
 		if err := rows.Scan(
 			&race.Season, &race.Round, &race.RaceName, &race.CircuitID, &race.CircuitName,
-			&race.Locality, &race.Country, &race.RaceDate, &race.RaceTime, &fetchedAt,
+			&race.Locality, &race.Country, &race.RaceDate, &race.RaceTime,
+			&race.QualiDate, &race.QualiTime, &race.SprintDate, &race.SprintTime, &fetchedAt,
 		); err != nil {
 			return nil, err
 		}
+		race.HasSprint = race.SprintDate != ""
 		race.IsPast = race.RaceDate < today
 		race.FetchedAt = fetchedAt
 		races = append(races, race)
@@ -368,13 +380,6 @@ func (r *Repo) GetConstructorStandings(season int) ([]ConstructorStanding, error
 
 // --- Daily refresh ---
 
-func (r *Repo) WasRefreshedToday() (bool, error) {
-	today := time.Now().UTC().Format("2006-01-02")
-	var count int
-	err := r.db.QueryRow(`SELECT COUNT(*) FROM f1_daily_refresh WHERE refresh_date = $1`, today).Scan(&count)
-	return count > 0, err
-}
-
 func (r *Repo) GetLastRefreshTime() *string {
 	var ts string
 	err := r.db.QueryRow(`SELECT refreshed_at FROM f1_daily_refresh ORDER BY refresh_date DESC LIMIT 1`).Scan(&ts)
@@ -404,6 +409,13 @@ func nullableString(s string) *string {
 }
 
 func nullableTime(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+func nullableDate(s string) *string {
 	if s == "" {
 		return nil
 	}

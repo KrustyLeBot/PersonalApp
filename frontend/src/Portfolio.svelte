@@ -4,6 +4,7 @@
   import AssetModal from './AssetModal.svelte';
   import HoldingsModal from './HoldingsModal.svelte';
   import ProjectionPanel from './ProjectionPanel.svelte';
+  import { autoRefreshIfStale } from './lib/dailyRefresh.js';
 
   Chart.register(ArcElement, PieController, Tooltip, Legend);
 
@@ -38,10 +39,17 @@
   const COLORS = ['#60a5fa','#34d399','#f59e0b','#a78bfa','#f87171','#38bdf8','#fb923c','#4ade80'];
   const HIDDEN = '••••';
 
-  onMount(loadSummary);
+  onMount(async () => {
+    await loadSummary();
+    // Page is now displayed with cached data; refresh in the background if stale.
+    autoRefreshIfStale(summary?.last_refresh, forceRefresh);
+  });
 
   async function loadSummary() {
-    loading = true; error = '';
+    // Only show the full-page loading state on the first load; a refresh-driven
+    // reload keeps the current view up (the button spinner signals the refresh).
+    if (!summary) loading = true;
+    error = '';
     try {
       const res = await fetch('/api/portfolio/summary');
       if (!res.ok) throw new Error(await res.text());

@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import Live from './f1/Live.svelte';
+  import { autoRefreshIfStale } from './lib/dailyRefresh.js';
 
   let races = [];
   let drivers = [];
@@ -66,6 +67,20 @@
     return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', timeZone: 'UTC' });
   }
 
+  // Weekday + day/month + local time for a session (date is UTC "YYYY-MM-DD",
+  // time is UTC "HH:MM:SS" or ""). Returns "" if no date.
+  function formatSession(dateStr, timeStr) {
+    if (!dateStr) return '';
+    const datePart = dateStr.slice(0, 10);
+    const timePart = timeStr && timeStr.length >= 5 ? timeStr.slice(0, 8) : '00:00:00';
+    const d = new Date(`${datePart}T${timePart}Z`);
+    if (Number.isNaN(d.getTime())) return '';
+    const day = d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+    if (!timeStr) return day;
+    const hm = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    return `${day} · ${hm}`;
+  }
+
   function formatStatus(status) {
     if (!status) return '';
     const s = status.toLowerCase();
@@ -81,10 +96,14 @@
 
   onMount(async () => {
     await Promise.all([loadCalendar(), loadStandings()]);
+    // Page is now displayed with cached data; refresh in the background if stale.
+    autoRefreshIfStale(lastRefresh, forceRefresh);
   });
 
   async function loadCalendar() {
-    loading = true;
+    // Only show the full-page loading state on the first load; a refresh-driven
+    // reload keeps the current view up (the button spinner signals the refresh).
+    if (races.length === 0) loading = true;
     error = '';
     try {
       const res = await fetch('/api/f1/races');
@@ -167,26 +186,41 @@
   $: upcomingRaces = races.filter(r => !r.isPast);
   $: nextRace = upcomingRaces[0] ?? null;
 
-  // A race is "live" if now is within the race window. raceTime is UTC ("HH:MM:SS"
-  // or ""); we open a generous window [start-1h, start+4h] to cover the whole event.
-  function isRaceLive(race) {
-    if (!race) return false;
-    const datePart = (race.raceDate ?? '').slice(0, 10);
+  // Is `now` within [start-1h, start+durationH] for a session? Dates are UTC
+  // ("YYYY-MM-DD") and times UTC ("HH:MM:SS" or ""). A missing time falls back to
+  // a default start hour so the window is still usable.
+  function inWindow(dateStr, timeStr, durationH, fallbackTime) {
+    const datePart = (dateStr ?? '').slice(0, 10);
     if (!datePart) return false;
-    const timePart = race.raceTime && race.raceTime.length >= 5 ? race.raceTime.slice(0, 8) : '13:00:00';
+    const timePart = timeStr && timeStr.length >= 5 ? timeStr.slice(0, 8) : fallbackTime;
     const start = new Date(`${datePart}T${timePart}Z`).getTime();
     if (Number.isNaN(start)) return false;
     const now = Date.now();
-    return now >= start - 3600_000 && now <= start + 4 * 3600_000;
+    return now >= start - 3600_000 && now <= start + durationH * 3600_000;
   }
 
-  // The live race is the next upcoming race if it's currently within its window.
-  $: liveRace = isRaceLive(nextRace) ? nextRace : null;
+  // The live session: the first weekend session of nextRace currently in its
+  // window. Sprint (~2h) and qualifying (~2h) are shorter than the race (~4h).
+  // Live.svelte follows OpenF1 session_key=latest, so it auto-shows whichever
+  // session is on track — we only decide whether to surface the Live tab.
+  function detectLiveSession(race) {
+    if (!race) return null;
+    if (race.hasSprint && inWindow(race.sprintDate, race.sprintTime, 2, '13:00:00'))
+      return { kind: 'Sprint', race };
+    if (inWindow(race.qualiDate, race.qualiTime, 2, '14:00:00'))
+      return { kind: 'Qualif', race };
+    if (inWindow(race.raceDate, race.raceTime, 4, '13:00:00'))
+      return { kind: 'Course', race };
+    return null;
+  }
 
-  // Auto-switch to the Live tab once, on first load, if a race is in progress —
-  // so opening the page during a GP lands straight on the live view.
+  $: liveSession = detectLiveSession(nextRace);
+  $: liveRace = liveSession?.race ?? null;
+
+  // Auto-switch to the Live tab once, on first load, if a session is in progress —
+  // so opening the page during a GP weekend lands straight on the live view.
   let autoSwitched = false;
-  $: if (liveRace && !autoSwitched) {
+  $: if (liveSession && !autoSwitched) {
     autoSwitched = true;
     subTab = 'live';
   }
@@ -222,9 +256,9 @@
 
   <!-- Sub-tabs -->
   <div class="subtabbar">
-    {#if liveRace}
+    {#if liveSession}
       <button class="subtab live-tab {subTab === 'live' ? 'active' : ''}" on:click={() => subTab = 'live'}>
-        <span class="live-dot"></span> Live
+        <span class="live-dot"></span> Live{liveSession.kind !== 'Course' ? ` · ${liveSession.kind}` : ''}
       </button>
     {/if}
     <button class="subtab {subTab === 'calendar' ? 'active' : ''}" on:click={() => subTab = 'calendar'}>
@@ -260,6 +294,15 @@
             <div class="race-info">
               <div class="race-name">{nextRace.raceName}</div>
               <div class="race-meta">{nextRace.circuitName} · {nextRace.locality}</div>
+              <div class="sessions">
+                {#if nextRace.hasSprint}
+                  <span class="session-chip sprint">Sprint · {formatSession(nextRace.sprintDate, nextRace.sprintTime)}</span>
+                {/if}
+                {#if nextRace.qualiDate}
+                  <span class="session-chip">Qualif · {formatSession(nextRace.qualiDate, nextRace.qualiTime)}</span>
+                {/if}
+                <span class="session-chip race-chip">Course · {formatSession(nextRace.raceDate, nextRace.raceTime)}</span>
+              </div>
             </div>
             <div class="race-date next-date">{formatDate(nextRace.raceDate)}</div>
           </div>
@@ -407,6 +450,14 @@
               <div class="race-info">
                 <div class="race-name">{race.raceName}</div>
                 <div class="race-meta">{race.circuitName}</div>
+                <div class="sessions">
+                  {#if race.hasSprint}
+                    <span class="session-chip sprint">Sprint · {formatSession(race.sprintDate, race.sprintTime)}</span>
+                  {/if}
+                  {#if race.qualiDate}
+                    <span class="session-chip">Qualif · {formatSession(race.qualiDate, race.qualiTime)}</span>
+                  {/if}
+                </div>
               </div>
               <div class="race-date">{formatDate(race.raceDate)}</div>
             </div>
@@ -572,6 +623,15 @@
   .race-name { font-size: .92rem; font-weight: 600; color: #f1f5f9;
                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .race-meta { font-size: .75rem; color: #64748b; margin-top: .15rem; }
+
+  .sessions { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .4rem; }
+  .session-chip {
+    font-size: .68rem; color: #94a3b8; background: #0f172a;
+    border: 1px solid #334155; border-radius: 5px; padding: .12rem .4rem;
+    white-space: nowrap; text-transform: capitalize;
+  }
+  .session-chip.race-chip { color: #fca5a5; border-color: #7f1d1d; }
+  .session-chip.sprint { color: #fcd34d; border-color: #78500a; }
   .race-date { font-size: .82rem; color: #94a3b8; white-space: nowrap; }
   .next-date { color: #fca5a5; font-weight: 600; }
   .race-chevron { font-size: .7rem; color: #64748b; margin-left: .25rem; }

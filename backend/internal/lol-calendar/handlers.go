@@ -30,9 +30,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 }
 
 func (h *Handler) schedule(w http.ResponseWriter, r *http.Request, email string) {
-	if _, err := h.svc.CheckAndRefreshDaily(email); err != nil {
-		log.Printf("lol-calendar daily refresh: %v", err)
-	}
+	// Daily refresh is driven by the frontend (POST /refresh) so this GET returns
+	// cached data instantly — see "Daily-refresh pages" in CLAUDE.md.
 	matches, err := h.repo.GetSchedule(pastDays, email)
 	if err != nil {
 		apiError(w, err, http.StatusInternalServerError)

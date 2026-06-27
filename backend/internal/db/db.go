@@ -307,9 +307,18 @@ func (d *Database) Migrate() error {
 			country      VARCHAR(100),
 			race_date    DATE         NOT NULL,
 			race_time    TIME,
+			quali_date   DATE,
+			quali_time   TIME,
+			sprint_date  DATE,
+			sprint_time  TIME,
 			fetched_at   TIMESTAMPTZ  NOT NULL,
 			PRIMARY KEY (season, round)
 		);
+
+		ALTER TABLE f1_races ADD COLUMN IF NOT EXISTS quali_date  DATE;
+		ALTER TABLE f1_races ADD COLUMN IF NOT EXISTS quali_time  TIME;
+		ALTER TABLE f1_races ADD COLUMN IF NOT EXISTS sprint_date DATE;
+		ALTER TABLE f1_races ADD COLUMN IF NOT EXISTS sprint_time TIME;
 
 		CREATE TABLE IF NOT EXISTS f1_race_results (
 			season             INT          NOT NULL,

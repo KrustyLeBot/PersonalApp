@@ -1,5 +1,6 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
+  import { autoRefreshIfStale } from './lib/dailyRefresh.js';
 
   let matches = [];
   let lastRefresh = null;
@@ -29,10 +30,14 @@
 
   onMount(async () => {
     await Promise.all([loadSchedule(), loadEnabledLeagues()]);
+    // Page is now displayed with cached data; refresh in the background if stale.
+    autoRefreshIfStale(lastRefresh, forceRefresh);
   });
 
   async function loadSchedule() {
-    loading = true;
+    // Only show the full-page loading state on the first load; a refresh-driven
+    // reload keeps the current view up (the button spinner signals the refresh).
+    if (matches.length === 0) loading = true;
     error = '';
     try {
       const res = await fetch('/api/lol-calendar/schedule');

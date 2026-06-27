@@ -253,10 +253,8 @@ func (h *Handler) deleteCategory(w http.ResponseWriter, r *http.Request, email s
 }
 
 func (h *Handler) summary(w http.ResponseWriter, r *http.Request, email string) {
-	refreshed, err := h.svc.CheckAndRefreshDaily()
-	if err != nil {
-		log.Printf("daily refresh: %v", err)
-	}
+	// Daily refresh is driven by the frontend (POST /refresh) so this GET returns
+	// cached data instantly — see "frontend-driven daily refresh" in CLAUDE.md.
 	assets, err := h.repo.GetAllAssets(email)
 	if err != nil {
 		apiError(w, err, http.StatusInternalServerError)
@@ -283,7 +281,7 @@ func (h *Handler) summary(w http.ResponseWriter, r *http.Request, email string) 
 		return
 	}
 	lastRefresh, _ := h.repo.GetLastRefreshTime()
-	jsonOK(w, h.svc.ComputeSummary(assets, holdings, prices, categories, dettes, lastRefresh, refreshed))
+	jsonOK(w, h.svc.ComputeSummary(assets, holdings, prices, categories, dettes, lastRefresh))
 }
 
 func (h *Handler) forceRefresh(w http.ResponseWriter, r *http.Request, _ string) {

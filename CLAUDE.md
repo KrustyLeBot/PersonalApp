@@ -63,7 +63,7 @@ internal/
     models.go              ← Asset, TickerPrice, Summary, constants (TypeBourse etc.)
     repo.go                ← Repo struct — all SQL queries
     ticker.go              ← TickerClient — Yahoo Finance v7 API
-    service.go             ← Service struct — RefreshTickers, CheckAndRefreshDaily, ComputeSummary
+    service.go             ← Service struct — RefreshTickers, ComputeSummary
     handlers.go            ← Handler struct, RegisterRoutes (/api/portfolio/*)
 ```
 
@@ -112,7 +112,19 @@ db → (none internal)
 Yahoo Finance symbols: `CW8.PA` (Amundi World on Euronext), `BTC-EUR` (Bitcoin in EUR), `AAPL` (Apple USD). Client hits `query1.finance.yahoo.com/v7/finance/quote` — no API key, requires real `User-Agent` header.
 
 ### Daily refresh
-On first `GET /api/portfolio/summary` each calendar day, `Service.CheckAndRefreshDaily()` fetches fresh prices and writes to `daily_refresh`. Subsequent calls skip the fetch. `POST /api/portfolio/refresh` forces an immediate refresh.
+Daily price refresh follows the **frontend-driven daily-refresh** pattern below. `POST /api/portfolio/refresh` forces an immediate refresh; the summary payload exposes `last_refresh` so the SPA knows whether to auto-trigger it.
+
+---
+
+## Fundamental rule: frontend-driven daily refresh
+
+**Pages that refresh external data once per calendar day must NOT block their GET endpoint on that refresh.** A blocking refresh leaves the page empty for seconds while the external fetch runs. Instead:
+
+1. **Backend** — the GET endpoint returns cached data instantly (no daily refresh in the read path). It includes `lastRefresh` (the last refresh timestamp, named `last_refresh` in the portfolio summary payload) so the SPA can tell whether it's stale. `POST /api/<feature>/refresh` is the only path that fetches from the external API.
+2. **Frontend** — use the shared helpers in `frontend/src/lib/dailyRefresh.js` (`isStale`, `autoRefreshIfStale`). In `onMount`: load and render cached data first, *then* `autoRefreshIfStale(lastRefresh, forceRefresh)`. `forceRefresh()` is the same function the manual "Actualiser" button calls — it sets `refreshing = true` (button spinner + "Actualisation…"), POSTs `/refresh`, and reloads on completion.
+3. **Frontend** — the reload triggered by `forceRefresh` must NOT flip the full-page loading state. Guard `loading = true` so it only fires on the first load (e.g. `if (items.length === 0) loading = true`); the button spinner alone signals the refresh.
+
+This applies to **every page with a daily refresh** (currently Portfolio, F1, LoL Calendar). When adding a new daily-refresh feature, follow this pattern — never refresh in the GET handler, and reuse `dailyRefresh.js` rather than re-implementing staleness logic.
 
 ---
 

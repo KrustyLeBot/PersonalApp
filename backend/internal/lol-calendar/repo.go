@@ -185,13 +185,6 @@ func (r *Repo) DismissSpoiler(matchID, email string) error {
 
 // --- Daily refresh ---
 
-func (r *Repo) WasRefreshedToday(email string) (bool, error) {
-	today := time.Now().UTC().Format("2006-01-02")
-	var count int
-	err := r.db.QueryRow(`SELECT COUNT(*) FROM lol_daily_refresh WHERE refresh_date = $1 AND user_email = $2`, today, email).Scan(&count)
-	return count > 0, err
-}
-
 func (r *Repo) GetLastRefreshTime(email string) *string {
 	var ts string
 	err := r.db.QueryRow(`SELECT refreshed_at FROM lol_daily_refresh WHERE user_email = $1 ORDER BY refresh_date DESC LIMIT 1`, email).Scan(&ts)
