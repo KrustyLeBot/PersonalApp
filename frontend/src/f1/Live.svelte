@@ -2,14 +2,17 @@
   import { onMount, onDestroy } from 'svelte';
   import TrackMap from './TrackMap.svelte';
   import {
-    fetchSession, fetchLatestRaceSession, fetchDrivers,
+    fetchRaceSessionByDate, fetchDrivers,
     fetchPositions, fetchIntervals, fetchLatestLaps,
     fetchLocations, fetchRaceControl, fetchTrackOutline,
   } from './openf1.js';
 
-  // demo=true → load the latest finished race once, no polling (static preview).
-  // demo=false → live session_key=latest, poll every second.
-  export let demo = false;
+  // Replay a finished Grand Prix's Race session as if it were live: we resolve
+  // the session from the race date, then run a clock shifted into the past so the
+  // historical telemetry plays back at 1× — identical feel to a live session.
+  // OpenF1's free tier only serves historical data, so live (in-progress) sessions
+  // aren't available; replaying a past race gives the same live UI for free.
+  export let race; // { season, round, raceDate, raceName, ... }
 
   let session = null;
   let drivers = {};       // number -> driver info
@@ -53,37 +56,39 @@
   };
   function mark(step, state) { steps[step] = state; steps = steps; }
 
-  // Demo replay clock: maps real wall-clock time onto the past race at 1× speed.
-  // The anchor is always `Date.now() - demoOffsetMs`, so it advances in real
+  // Replay clock: maps real wall-clock time onto the past race at 1× speed.
+  // The anchor is always `Date.now() - replayOffsetMs`, so it advances in real
   // time — identical feel to a live session, just shifted into the past race.
-  let demoOffsetMs = 0;
+  let replayOffsetMs = 0;
+
+  // Start the replay this far into the race: lap 1 chaos is over, the field has
+  // settled and gaps are meaningful.
+  const REPLAY_START_OFFSET_MS = 120_000; // minute 2
 
   // Staggered polling cadences (ms). Requests go through openf1.js's throttle
   // queue (≥400ms apart), so even when timers coincide we stay under 3 req/s.
   let timers = [];
 
-  // Set when the component is destroyed (e.g. user hides the demo). The sequential
-  // init below can be mid-flight when that happens; we check this flag after each
-  // await so no further fetch fires once the component is gone.
+  // Set when the component is destroyed (e.g. user closes the replay). The
+  // sequential init below can be mid-flight when that happens; we check this flag
+  // after each await so no further fetch fires once the component is gone.
   let destroyed = false;
 
   onMount(async () => {
     try {
-      session = demo ? await fetchLatestRaceSession() : await fetchSession('latest');
+      session = await fetchRaceSessionByDate(race?.raceDate);
       if (destroyed) return;
-      if (!session) throw new Error('Aucune session disponible');
+      if (!session) throw new Error('Replay indisponible pour cette course');
       mark('session', 'done');
 
       drivers = await fetchDrivers(session.session_key);
       if (destroyed) return;
       mark('drivers', 'done');
 
-      // Demo: start the replay 10 min into the race (settled racing, clear gaps).
-      // 1× speed — the offset is fixed so the replay clock tracks real time.
-      if (demo) {
-        const replayStart = new Date(session.date_start).getTime() + 600_000;
-        demoOffsetMs = Date.now() - replayStart;
-      }
+      // Start the replay at minute 2; the fixed offset keeps the replay clock
+      // tracking real time at 1× speed.
+      const replayStart = new Date(session.date_start).getTime() + REPLAY_START_OFFSET_MS;
+      replayOffsetMs = Date.now() - replayStart;
 
       // Build the track shape from one lap of telemetry — same coordinate space
       // as the cars, so positions align perfectly (no GPS/rotation mismatch).
@@ -110,7 +115,8 @@
 
       // OpenF1 free tier is 30 req/min. Budget (≈29/min): map every 4s (15/min),
       // classification every 12s (~10/min, 2 calls), flags every 30s (~4/min,
-      // 2 calls). Same cadence for live and demo — only the time anchor differs.
+      // 2 calls). The clock is anchored in the past, so every poll fetches the
+      // replay window — same cadence and feel as a live session.
       timers.push(setInterval(refreshLocations, 4000));
       timers.push(setInterval(refreshClassification, 12000));
       timers.push(setInterval(refreshSlow, 30000));
@@ -127,7 +133,7 @@
   });
 
   function anchor() {
-    return demo ? Date.now() - demoOffsetMs : Date.now();
+    return Date.now() - replayOffsetMs;
   }
 
   // Append a freshly fetched window of samples into each driver's timeline,
@@ -255,11 +261,9 @@
 </script>
 
 <div class="live">
-  {#if demo}
-    <div class="demo-banner">
-      Replay de la dernière course ({session?.location ?? '…'}) — simulation du rendu live
-    </div>
-  {/if}
+  <div class="replay-banner">
+    Replay {race?.raceName ? `du ${race.raceName}` : 'de la course'} — rejoué comme en direct depuis la minute 2
+  </div>
 
   {#if loading}
     <div class="loading-checklist">
@@ -281,7 +285,7 @@
     <!-- Status bar -->
     <div class="status-bar">
       <div class="session-name">
-        <span class="live-dot" class:static={demo}></span>
+        <span class="live-dot"></span>
         {session.circuit_short_name} · {session.session_name}
       </div>
       <div class="status-right">
@@ -357,7 +361,7 @@
   .check-item.pending .check-icon { animation: blink 1.2s infinite; }
   @keyframes blink { 0%,100% { opacity: .4; } 50% { opacity: 1; } }
 
-  .demo-banner {
+  .replay-banner {
     font-size: .78rem; color: #fbbf24; background: #1f1a05;
     border: 1px solid #78500a; border-radius: 8px; padding: .5rem .8rem;
   }
@@ -374,7 +378,6 @@
     width: 9px; height: 9px; border-radius: 50%; background: #ef4444;
     animation: pulse 1.4s infinite;
   }
-  .live-dot.static { background: #64748b; animation: none; }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
 
   .status-right { display: flex; align-items: center; gap: .6rem; }

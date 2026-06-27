@@ -1,8 +1,9 @@
-// OpenF1 API client — public API (api.openf1.org), no key, CORS-enabled.
-// All live race data is fetched client-side. Historical data is free; we only
-// use the free REST endpoints here (no MQTT/WebSocket streaming).
+// OpenF1 API client. OpenF1 dropped browser CORS support, so we go through our
+// own backend relay (/api/f1/openf1/<endpoint>) instead of hitting
+// api.openf1.org directly — the server forwards the request and the query string
+// verbatim. We only use the free historical REST endpoints (no MQTT/WebSocket).
 
-const BASE = 'https://api.openf1.org/v1';
+const BASE = '/api/f1/openf1';
 
 // OpenF1 free tier allows 30 requests/MINUTE (= 0.5 req/s). We serialize all
 // requests through a single queue with a minimum spacing so bursts (initial
@@ -54,19 +55,21 @@ async function get(path, params = {}) {
 
 // --- Sessions ---
 
-// Returns the session object for the given key (or 'latest').
-export async function fetchSession(sessionKey = 'latest') {
-  const rows = await get('/sessions', { session_key: sessionKey });
-  return rows[rows.length - 1] ?? null;
-}
-
-// Returns the latest *Race* session of the most recent meeting — used for the
-// static demo so we land on a race rather than a practice/qualifying session.
-export async function fetchLatestRaceSession() {
-  const latest = await fetchSession('latest');
-  if (!latest) return null;
-  const rows = await get('/sessions', { meeting_key: latest.meeting_key });
-  return rows.find(s => s.session_type === 'Race') ?? latest;
+// Returns the *Race* session for a given calendar date ("YYYY-MM-DD"). Used to
+// replay a finished Grand Prix from its results page: OpenF1 indexes sessions by
+// date_start, so we match the race day and pick the Race session of that meeting.
+export async function fetchRaceSessionByDate(dateStr) {
+  const day = (dateStr ?? '').slice(0, 10);
+  if (!day) return null;
+  const year = Number(day.slice(0, 4));
+  // OpenF1 supports date filtering on date_start; bound the query to the race day.
+  const rows = await get('/sessions', {
+    year,
+    'date_start>': `${day}T00:00:00`,
+    'date_start<': `${day}T23:59:59`,
+  });
+  if (!rows.length) return null;
+  return rows.find(s => s.session_type === 'Race') ?? rows[rows.length - 1];
 }
 
 // --- Drivers ---
@@ -132,7 +135,7 @@ export async function fetchLatestLaps(sessionKey) {
 //
 // OpenF1 /location is sampled ~3.7Hz; we request a window slightly larger than
 // the poll interval so consecutive fetches overlap and no samples are missed.
-// `anchorMs` is the window end: Date.now() live, or a past instant for the demo.
+// `anchorMs` is the window end — a past instant, since we replay finished races.
 export async function fetchLocations(sessionKey, anchorMs = Date.now(), windowSec = 15) {
   const since = new Date(anchorMs - windowSec * 1000).toISOString();
   const until = new Date(anchorMs).toISOString();

@@ -20,7 +20,7 @@
   let qualifyingResults = [];
   let qualifyingLoading = false;
   let qualifyingError = '';
-  let detailTab = 'race'; // 'race' | 'qualifying'
+  let detailTab = 'race'; // 'race' | 'qualifying' | 'replay'
 
   // Sub-tab: 'calendar' | 'standings'
   let subTab = 'calendar';
@@ -186,49 +186,6 @@
   $: upcomingRaces = races.filter(r => !r.isPast);
   $: nextRace = upcomingRaces[0] ?? null;
 
-  // Is `now` within [start-1h, start+durationH] for a session? Dates are UTC
-  // ("YYYY-MM-DD") and times UTC ("HH:MM:SS" or ""). A missing time falls back to
-  // a default start hour so the window is still usable.
-  function inWindow(dateStr, timeStr, durationH, fallbackTime) {
-    const datePart = (dateStr ?? '').slice(0, 10);
-    if (!datePart) return false;
-    const timePart = timeStr && timeStr.length >= 5 ? timeStr.slice(0, 8) : fallbackTime;
-    const start = new Date(`${datePart}T${timePart}Z`).getTime();
-    if (Number.isNaN(start)) return false;
-    const now = Date.now();
-    return now >= start - 3600_000 && now <= start + durationH * 3600_000;
-  }
-
-  // The live session: the first weekend session of nextRace currently in its
-  // window. Sprint (~2h) and qualifying (~2h) are shorter than the race (~4h).
-  // Live.svelte follows OpenF1 session_key=latest, so it auto-shows whichever
-  // session is on track — we only decide whether to surface the Live tab.
-  function detectLiveSession(race) {
-    if (!race) return null;
-    if (race.hasSprint && inWindow(race.sprintDate, race.sprintTime, 2, '13:00:00'))
-      return { kind: 'Sprint', race };
-    if (inWindow(race.qualiDate, race.qualiTime, 2, '14:00:00'))
-      return { kind: 'Qualif', race };
-    if (inWindow(race.raceDate, race.raceTime, 4, '13:00:00'))
-      return { kind: 'Course', race };
-    return null;
-  }
-
-  $: liveSession = detectLiveSession(nextRace);
-  $: liveRace = liveSession?.race ?? null;
-
-  // Auto-switch to the Live tab once, on first load, if a session is in progress —
-  // so opening the page during a GP weekend lands straight on the live view.
-  let autoSwitched = false;
-  $: if (liveSession && !autoSwitched) {
-    autoSwitched = true;
-    subTab = 'live';
-  }
-
-  // Demo mode flag: when no race is live, the user can still preview the live UI
-  // with the last finished session's static data.
-  let showDemo = false;
-
   function positionLabel(pos) {
     if (pos === 1) return '🥇';
     if (pos === 2) return '🥈';
@@ -256,11 +213,6 @@
 
   <!-- Sub-tabs -->
   <div class="subtabbar">
-    {#if liveSession}
-      <button class="subtab live-tab {subTab === 'live' ? 'active' : ''}" on:click={() => subTab = 'live'}>
-        <span class="live-dot"></span> Live{liveSession.kind !== 'Course' ? ` · ${liveSession.kind}` : ''}
-      </button>
-    {/if}
     <button class="subtab {subTab === 'calendar' ? 'active' : ''}" on:click={() => subTab = 'calendar'}>
       Calendrier
     </button>
@@ -273,11 +225,6 @@
     <div class="state-msg">Chargement…</div>
   {:else if error}
     <div class="state-msg error">{error}</div>
-  {:else if subTab === 'live' && liveRace}
-
-    <!-- ── LIVE TAB ── -->
-    <Live demo={false} />
-
   {:else if subTab === 'calendar'}
 
     <!-- ── CALENDAR TAB ── -->
@@ -336,6 +283,9 @@
                 <div class="detail-tabs">
                   <button class="detail-tab {detailTab === 'race' ? 'active' : ''}" on:click={() => detailTab = 'race'}>Course</button>
                   <button class="detail-tab {detailTab === 'qualifying' ? 'active' : ''}" on:click={() => detailTab = 'qualifying'}>Qualifications</button>
+                  <button class="detail-tab replay-tab {detailTab === 'replay' ? 'active' : ''}" on:click={() => detailTab = 'replay'}>
+                    <span class="live-dot"></span> Replay live
+                  </button>
                 </div>
 
                 {#if detailTab === 'race'}
@@ -404,7 +354,7 @@
                     </div>
                   {/if}
 
-                {:else}
+                {:else if detailTab === 'qualifying'}
                   {#if qualifyingLoading}
                     <div class="results-state">Chargement…</div>
                   {:else if qualifyingError}
@@ -435,6 +385,13 @@
                       </table>
                     </div>
                   {/if}
+
+                {:else}
+                  <!-- Replay: rejoue la session course comme en direct (OpenF1 historique).
+                       {#key} force un remount à chaque course pour repartir du début. -->
+                  {#key selectedRace.round}
+                    <Live race={selectedRace} />
+                  {/key}
                 {/if}
               </div>
             {/if}
@@ -463,19 +420,6 @@
             </div>
           {/each}
         {/if}
-
-        <!-- Live UI preview (static): demo with the last finished session's data -->
-        <div class="demo-section">
-          <div class="section-label">Aperçu live (démo)</div>
-          {#if showDemo}
-            <Live demo={true} />
-            <button class="btn-demo" on:click={() => showDemo = false}>Masquer l'aperçu</button>
-          {:else}
-            <button class="btn-demo" on:click={() => showDemo = true}>
-              Afficher un aperçu de l'interface live (dernière course)
-            </button>
-          {/if}
-        </div>
 
       </div>
     </div>
@@ -578,22 +522,12 @@
   }
   .subtab:hover { color: #f1f5f9; }
   .subtab.active { color: #e10600; border-bottom-color: #e10600; }
-  .live-tab { display: flex; align-items: center; gap: .4rem; color: #fca5a5; }
+  .replay-tab { display: inline-flex; align-items: center; gap: .35rem; }
   .live-dot {
     width: 8px; height: 8px; border-radius: 50%; background: #ef4444;
     animation: live-pulse 1.4s infinite;
   }
   @keyframes live-pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
-
-  /* Demo preview */
-  .demo-section { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px dashed #334155; }
-  .btn-demo {
-    width: 100%; margin-top: .5rem;
-    background: #1e293b; border: 1px solid #334155; color: #94a3b8;
-    padding: .6rem 1rem; border-radius: 8px; font-size: .85rem; cursor: pointer;
-    transition: background .15s, color .15s;
-  }
-  .btn-demo:hover { background: #263247; color: #f1f5f9; }
 
   /* Section labels */
   .section-label {
