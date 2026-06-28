@@ -88,8 +88,14 @@ func (r *Repo) Upsert(matches []Match, email string) error {
 			)
 			ON CONFLICT (match_id, user_email) DO UPDATE SET
 				state         = EXCLUDED.state,
+				team1_name    = EXCLUDED.team1_name,
+				team1_code    = EXCLUDED.team1_code,
+				team1_image   = EXCLUDED.team1_image,
 				team1_wins    = EXCLUDED.team1_wins,
 				team1_outcome = EXCLUDED.team1_outcome,
+				team2_name    = EXCLUDED.team2_name,
+				team2_code    = EXCLUDED.team2_code,
+				team2_image   = EXCLUDED.team2_image,
 				team2_wins    = EXCLUDED.team2_wins,
 				team2_outcome = EXCLUDED.team2_outcome,
 				is_spoiler    = EXCLUDED.is_spoiler,
