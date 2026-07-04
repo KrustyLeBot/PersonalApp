@@ -42,7 +42,9 @@
   let modalOpen = false;
   let modalDates = []; // ouvrables sélectionnées (non-weekend, non-fériés)
   let modalSaving = false;
-  let modalType = 'leave'; // 'leave' | 'remote' | 'office' | 'clear'
+  // Each half: '' = ne pas changer, 'leave'|'remote'|'office' = imposer, 'clear' = suivre le preset
+  let modalAM = '';
+  let modalPM = '';
 
   // Preset editing
   let editingPreset = false;
@@ -99,10 +101,6 @@
   $: holidayLabels = summary
     ? Object.fromEntries(summary.holidays.map(h => [h.date, h.label]))
     : {};
-
-  $: totalLeaves = summary
-    ? summary.days.filter(d => d.is_leave).length
-    : 0;
 
   $: months = summary ? buildMonths(summary.days) : [];
 
@@ -189,27 +187,24 @@
 
   // --- Modal ---
 
+  // applyHalf mutates cur[half] according to the modal choice:
+  // '' = leave unchanged, 'clear' = follow preset (empty override), else impose the type.
+  function applyHalf(cur, half, choice) {
+    if (choice === '') return;
+    cur[half] = choice === 'clear' ? '' : choice;
+  }
+
   function openModal(dates, singleDay = false) {
     modalDates = dates;
-    // Pre-select based on current state: single day uses its own state,
-    // multi-day defaults to 'leave' unless all days share the same override.
+    // Pre-select each half from the day's effective state when a single day is
+    // opened; otherwise start empty ("ne pas changer") to avoid clobbering a mix.
     if (singleDay && dates.length === 1) {
       const day = dayMap[dates[0]];
-      if (day?.override_type) {
-        modalType = day.override_type;
-      } else if (day?.is_remote) {
-        modalType = 'remote';
-      } else {
-        modalType = 'office';
-      }
+      modalAM = day?.am_state || '';
+      modalPM = day?.pm_state || '';
     } else {
-      // Check if all selected days share the same override — if so, pre-select it
-      const types = new Set(dates.map(d => dayMap[d]?.override_type || ''));
-      if (types.size === 1 && [...types][0]) {
-        modalType = [...types][0];
-      } else {
-        modalType = 'leave';
-      }
+      modalAM = '';
+      modalPM = '';
     }
     modalOpen = true;
   }
@@ -221,15 +216,23 @@
 
   async function modalApply() {
     modalSaving = true;
-    // Build the full overrides map from current summary state
+    // Rebuild the full overrides map from current summary state, then apply the
+    // chosen half-day changes to the selected dates.
     const overrides = {};
     for (const d of summary.days) {
-      if (d.override_type) overrides[d.date] = d.override_type;
+      if (d.am_override || d.pm_override) {
+        overrides[d.date] = { am: d.am_override, pm: d.pm_override };
+      }
     }
-    if (modalType === 'clear') {
-      for (const d of modalDates) delete overrides[d];
-    } else {
-      for (const d of modalDates) overrides[d] = modalType;
+    for (const date of modalDates) {
+      const cur = overrides[date] || { am: '', pm: '' };
+      applyHalf(cur, 'am', modalAM);
+      applyHalf(cur, 'pm', modalPM);
+      if (cur.am === '' && cur.pm === '') {
+        delete overrides[date];
+      } else {
+        overrides[date] = cur;
+      }
     }
     try {
       const res = await fetch(`/api/telework/overrides/${selectedYear}`, {
@@ -280,15 +283,26 @@
     return pct.toFixed(2).replace('.', ',');
   }
 
+  const STATE_LABELS = { leave: 'Congé', remote: 'Télétravail', office: 'Bureau' };
+
+  function halfLabel(state, override) {
+    const base = STATE_LABELS[state] || '';
+    return override ? `${base} (override)` : base;
+  }
+
   function dayTitle(day) {
     if (!day) return '';
     if (day.is_holiday) return holidayLabels[day.date] || 'Férié';
-    if (day.is_leave) return 'Congé';
-    if (day.override_type === 'remote') return 'Télétravail (override)';
-    if (day.override_type === 'office') return 'Bureau (override)';
-    if (day.is_remote) return 'Télétravail (preset)';
-    if (!day.is_weekend) return 'Bureau (preset)';
-    return '';
+    if (day.is_weekend) return '';
+    const am = halfLabel(day.am_state, day.am_override);
+    const pm = halfLabel(day.pm_state, day.pm_override);
+    if (am === pm) return am;
+    return `Matin : ${am} · Après-midi : ${pm}`;
+  }
+
+  // fmtDays renders a half-day total: integers plain, halves with a comma (12,5).
+  function fmtDays(n) {
+    return Number.isInteger(n) ? String(n) : n.toFixed(1).replace('.', ',');
   }
 
   function fmtDate(d) {
@@ -323,19 +337,19 @@
       <div class="stats-bar">
         <div class="stat">
           <span class="stat-label">Jours travaillés</span>
-          <span class="stat-val">{summary.total_worked}</span>
+          <span class="stat-val">{fmtDays(summary.total_worked)}</span>
         </div>
         <div class="stat">
           <span class="stat-label">En présence</span>
-          <span class="stat-val">{summary.total_on_site}</span>
+          <span class="stat-val">{fmtDays(summary.total_on_site)}</span>
         </div>
         <div class="stat">
           <span class="stat-label">Télétravail</span>
-          <span class="stat-val">{summary.total_remote}</span>
+          <span class="stat-val">{fmtDays(summary.total_remote)}</span>
         </div>
         <div class="stat">
           <span class="stat-label">Congés</span>
-          <span class="stat-val">{totalLeaves}</span>
+          <span class="stat-val">{fmtDays(summary.total_leave)}</span>
         </div>
         <div class="stat" class:over-pct={summary.over_threshold}>
           <span class="stat-label">% TT</span>
@@ -347,7 +361,7 @@
         </div>
         {#if summary.over_threshold}
           <div class="alert-recover">
-            ⚠ TT > 40 % — encore <strong>{summary.days_to_recover}</strong> jour{summary.days_to_recover > 1 ? 's' : ''} en présence à rattraper
+            ⚠ TT > 40 % — encore <strong>{fmtDays(summary.days_to_recover)}</strong> jour{summary.days_to_recover > 1 ? 's' : ''} en présence à rattraper
           </div>
         {:else}
           <div class="alert-ok">✓ TT ≤ 40 %</div>
@@ -388,7 +402,7 @@
         <span class="leg-item"><span class="leg-swatch leg-office"></span>Bureau</span>
         <span class="leg-item"><span class="leg-override-dot"></span>Override manuel</span>
       </div>
-      <div class="range-hint">Cliquer pour éditer un jour · Glisser pour sélectionner une plage</div>
+      <div class="range-hint">Cliquer pour éditer un jour (matin / après-midi) · Glisser pour une plage</div>
     </div>
   </div>
 
@@ -422,15 +436,16 @@
                     class="day-cell"
                     class:weekend={day.is_weekend}
                     class:holiday={day.is_holiday}
-                    class:leave={day.is_leave && !day.is_holiday}
-                    class:remote={day.is_remote && !day.is_leave && !day.is_holiday}
-                    class:office={!day.is_weekend && !day.is_holiday && !day.is_leave && !day.is_remote}
-                    class:override={!!day.override_type && !day.is_holiday}
+                    class:override={(!!day.am_override || !!day.pm_override) && !day.is_holiday}
                     class:selectable={!day.is_weekend && !day.is_holiday}
                     class:in-drag={dragRangeSet.has(day.date)}
                     title={dayTitle(day)}
                     data-date={day.date}
                   >
+                    {#if !day.is_weekend && !day.is_holiday}
+                      <span class="half am half-{day.am_state}"></span>
+                      <span class="half pm half-{day.pm_state}"></span>
+                    {/if}
                     <span class="day-num">{new Date(day.date + 'T00:00:00Z').getUTCDate()}</span>
                   </div>
                 {:else}
@@ -455,20 +470,26 @@
       </div>
 
       <div class="modal-body">
-        <label class="modal-label" for="modal-type-select">Type</label>
-        <select
-          id="modal-type-select"
-          class="modal-select"
-          bind:value={modalType}
-          disabled={modalSaving}
-        >
-          <option value="leave">Congé</option>
-          <option value="remote">Télétravail</option>
-          <option value="office">Bureau</option>
-          {#if modalDates.some(d => dayMap[d]?.override_type)}
-            <option value="clear">Réinitialiser (suivre le preset)</option>
-          {/if}
-        </select>
+        <div class="modal-half">
+          <label class="modal-label" for="modal-am-select">Matin</label>
+          <select id="modal-am-select" class="modal-select" bind:value={modalAM} disabled={modalSaving}>
+            <option value="">Ne pas changer</option>
+            <option value="leave">Congé</option>
+            <option value="remote">Télétravail</option>
+            <option value="office">Bureau</option>
+            <option value="clear">Suivre le preset</option>
+          </select>
+        </div>
+        <div class="modal-half">
+          <label class="modal-label" for="modal-pm-select">Après-midi</label>
+          <select id="modal-pm-select" class="modal-select" bind:value={modalPM} disabled={modalSaving}>
+            <option value="">Ne pas changer</option>
+            <option value="leave">Congé</option>
+            <option value="remote">Télétravail</option>
+            <option value="office">Bureau</option>
+            <option value="clear">Suivre le preset</option>
+          </select>
+        </div>
       </div>
 
       <div class="modal-footer">
@@ -740,20 +761,19 @@
     font-weight: 600;
   }
 
-  .day-cell.leave {
-    background: #1c3b2e;
-    color: #4ade80;
+  /* Half-day fills: AM covers the top half, PM the bottom half. */
+  .half {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 50%;
   }
+  .half.am { top: 0; }
+  .half.pm { bottom: 0; }
 
-  .day-cell.remote {
-    background: #1e3a5f;
-    color: #93c5fd;
-  }
-
-  .day-cell.office {
-    background: #1c1c12;
-    color: #a8a29e;
-  }
+  .half-leave  { background: #1c3b2e; }
+  .half-remote { background: #1e3a5f; }
+  .half-office { background: #1c1c12; }
 
   .day-cell.selectable { cursor: pointer; }
   .day-cell.selectable:hover { filter: brightness(1.35); }
@@ -768,6 +788,7 @@
     height: 4px;
     border-radius: 50%;
     background: #f59e0b;
+    z-index: 3;
   }
 
   .day-cell.in-drag {
@@ -775,7 +796,7 @@
     filter: brightness(1.3);
   }
 
-  .day-num { line-height: 1; }
+  .day-num { line-height: 1; position: relative; z-index: 2; }
 
   /* Modal */
   .modal-backdrop {
@@ -820,6 +841,12 @@
   }
 
   .modal-body {
+    display: flex;
+    gap: 1rem;
+  }
+
+  .modal-half {
+    flex: 1;
     display: flex;
     flex-direction: column;
     gap: .5rem;

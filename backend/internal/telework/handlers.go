@@ -78,23 +78,26 @@ func (h *Handler) getOverrides(w http.ResponseWriter, r *http.Request, email str
 	jsonOK(w, overrides)
 }
 
-// bulkSetOverrides accepts a JSON object mapping YYYY-MM-DD → type ("leave"|"remote"|"office").
+// bulkSetOverrides accepts a JSON object mapping YYYY-MM-DD → {"am":..,"pm":..}
+// where each half is "leave"|"remote"|"office"|"" (empty = follow preset).
 func (h *Handler) bulkSetOverrides(w http.ResponseWriter, r *http.Request, email string) {
 	year, err := pathYear(r)
 	if err != nil {
 		http.Error(w, "invalid year", http.StatusBadRequest)
 		return
 	}
-	var overrides map[string]string
+	var overrides map[string]Override
 	if err := json.NewDecoder(r.Body).Decode(&overrides); err != nil {
 		http.Error(w, "invalid body", http.StatusBadRequest)
 		return
 	}
-	// Validate types
-	for _, t := range overrides {
-		if t != "leave" && t != "remote" && t != "office" {
-			http.Error(w, "invalid override type: "+t, http.StatusBadRequest)
-			return
+	// Validate half-day types
+	for _, ov := range overrides {
+		for _, t := range []string{ov.AM, ov.PM} {
+			if t != "" && t != "leave" && t != "remote" && t != "office" {
+				http.Error(w, "invalid override type: "+t, http.StatusBadRequest)
+				return
+			}
 		}
 	}
 	if err := h.repo.BulkSetOverrides(year, overrides, email); err != nil {

@@ -41,8 +41,8 @@ func (s *Service) ComputeYear(year int, email string) (YearSummary, error) {
 	end := time.Date(year+1, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	var days []DaySummary
-	totalWorked := 0
-	totalRemote := 0
+	// Totals in halves; converted to days (×0.5) at the end.
+	var workedHalves, remoteHalves, leaveHalves int
 
 	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
 		ds := d.Format("2006-01-02")
@@ -50,58 +50,60 @@ func (s *Service) ComputeYear(year int, email string) (YearSummary, error) {
 		isWeekend := wd == 0 || wd == 6
 		isHoliday := holidaySet[ds]
 
-		overrideType := overrides[ds] // "" if no override
+		ov := overrides[ds] // zero-value Override if none
 
-		// Holidays and weekends can never be worked, regardless of override.
-		isLeave := !isWeekend && !isHoliday && overrideType == "leave"
-		isWorked := !isWeekend && !isHoliday && !isLeave
-
-		var isRemote bool
-		if isWorked {
-			totalWorked++
-			if overrideType == "remote" {
-				isRemote = true
-			} else if overrideType == "office" {
-				isRemote = false
-			} else {
-				isRemote = remoteSet[wd]
-			}
-			if isRemote {
-				totalRemote++
+		var amState, pmState string
+		if !isWeekend && !isHoliday {
+			amState = effectiveHalf(ov.AM, remoteSet[wd])
+			pmState = effectiveHalf(ov.PM, remoteSet[wd])
+			for _, st := range []string{amState, pmState} {
+				switch st {
+				case "leave":
+					leaveHalves++
+				case "remote":
+					workedHalves++
+					remoteHalves++
+				case "office":
+					workedHalves++
+				}
 			}
 		}
 
 		days = append(days, DaySummary{
-			Date:         ds,
-			Weekday:      wd,
-			IsWeekend:    isWeekend,
-			IsHoliday:    isHoliday,
-			IsLeave:      isLeave,
-			IsRemote:     isRemote,
-			OverrideType: overrideType,
+			Date:       ds,
+			Weekday:    wd,
+			IsWeekend:  isWeekend,
+			IsHoliday:  isHoliday,
+			AMState:    amState,
+			PMState:    pmState,
+			AMOverride: ov.AM,
+			PMOverride: ov.PM,
 		})
 	}
 
+	totalWorked := float64(workedHalves) / 2
+	totalRemote := float64(remoteHalves) / 2
 	totalOnSite := totalWorked - totalRemote
+	totalLeave := float64(leaveHalves) / 2
 
 	var remotePct, onSitePct float64
-	if totalWorked > 0 {
-		remotePct = math.Round(float64(totalRemote)/float64(totalWorked)*10000) / 100
-		onSitePct = math.Round(float64(totalOnSite)/float64(totalWorked)*10000) / 100
+	if workedHalves > 0 {
+		remotePct = math.Round(float64(remoteHalves)/float64(workedHalves)*10000) / 100
+		onSitePct = math.Round(float64(workedHalves-remoteHalves)/float64(workedHalves)*10000) / 100
 	}
 
 	overThreshold := remotePct > 40.0
 
-	// Days to recover = TT days to convert to on-site so that remote_pct ≤ 40%.
-	// Converting a TT day to on-site decreases totalRemote by 1; totalWorked is unchanged.
-	// Solve: (totalRemote - x) / totalWorked ≤ 0.4  →  x ≥ totalRemote - 0.4*totalWorked
-	daysToRecover := 0
-	if overThreshold && totalWorked > 0 {
-		needed := float64(totalRemote) - 0.4*float64(totalWorked)
-		daysToRecover = int(math.Ceil(needed))
-		if daysToRecover < 0 {
-			daysToRecover = 0
+	// Halves to recover = TT halves to convert to on-site so that remote_pct ≤ 40%.
+	// Solve: (remoteHalves - x) / workedHalves ≤ 0.4  →  x ≥ remoteHalves - 0.4*workedHalves
+	daysToRecover := 0.0
+	if overThreshold && workedHalves > 0 {
+		needed := float64(remoteHalves) - 0.4*float64(workedHalves)
+		halves := math.Ceil(needed)
+		if halves < 0 {
+			halves = 0
 		}
+		daysToRecover = halves / 2
 	}
 
 	return YearSummary{
@@ -111,9 +113,22 @@ func (s *Service) ComputeYear(year int, email string) (YearSummary, error) {
 		TotalWorked:   totalWorked,
 		TotalRemote:   totalRemote,
 		TotalOnSite:   totalOnSite,
+		TotalLeave:    totalLeave,
 		RemotePct:     remotePct,
 		OnSitePct:     onSitePct,
 		DaysToRecover: daysToRecover,
 		OverThreshold: overThreshold,
 	}, nil
+}
+
+// effectiveHalf resolves one half-day's state: the override if set, otherwise the
+// preset (remote when presetRemote is true, else office).
+func effectiveHalf(override string, presetRemote bool) string {
+	if override != "" {
+		return override
+	}
+	if presetRemote {
+		return "remote"
+	}
+	return "office"
 }

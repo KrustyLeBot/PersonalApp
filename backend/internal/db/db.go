@@ -189,6 +189,20 @@ func (d *Database) Migrate() error {
 			END IF;
 		END $$;
 
+		-- Add am_type/pm_type to telework_overrides for half-day support.
+		-- Each half is 'leave'|'remote'|'office'. The legacy 'type' column is kept
+		-- in sync (= am_type) for backward compatibility.
+		DO $$ BEGIN
+			IF NOT EXISTS (
+				SELECT FROM information_schema.columns
+				WHERE table_name = 'telework_overrides' AND column_name = 'am_type'
+			) THEN
+				ALTER TABLE telework_overrides ADD COLUMN am_type VARCHAR(10) NOT NULL DEFAULT '' CHECK (am_type IN ('leave','remote','office',''));
+				ALTER TABLE telework_overrides ADD COLUMN pm_type VARCHAR(10) NOT NULL DEFAULT '' CHECK (pm_type IN ('leave','remote','office',''));
+				UPDATE telework_overrides SET am_type = type, pm_type = type;
+			END IF;
+		END $$;
+
 		-- Add user_email to telework_leaves if still used.
 		DO $$ BEGIN
 			IF NOT EXISTS (

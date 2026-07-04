@@ -9,10 +9,11 @@ type Preset struct {
 }
 
 // Override represents a per-day override of the weekly preset.
-// Type is one of: "leave", "remote", "office".
+// AM and PM each hold one of: "leave", "remote", "office" (or "" = follow preset).
 type Override struct {
 	Date string `json:"date"` // YYYY-MM-DD
-	Type string `json:"type"`
+	AM   string `json:"am"`
+	PM   string `json:"pm"`
 }
 
 // Holiday represents a public holiday in Geneva.
@@ -22,27 +23,33 @@ type Holiday struct {
 }
 
 // DaySummary describes a single calendar day.
+// AMState/PMState are the effective state of each half ("leave"|"remote"|"office"),
+// empty on weekends/holidays. AMOverride/PMOverride are the explicit user overrides
+// (empty when the half follows the preset).
 type DaySummary struct {
-	Date         string `json:"date"`
-	Weekday      int    `json:"weekday"` // 0=Sun..6=Sat
-	IsWeekend    bool   `json:"is_weekend"`
-	IsHoliday    bool   `json:"is_holiday"`
-	IsLeave      bool   `json:"is_leave"`
-	IsRemote     bool   `json:"is_remote"`      // TT day (preset or override)
-	OverrideType string `json:"override_type"`  // "leave"|"remote"|"office"|"" — explicit override set by user
+	Date       string `json:"date"`
+	Weekday    int    `json:"weekday"` // 0=Sun..6=Sat
+	IsWeekend  bool   `json:"is_weekend"`
+	IsHoliday  bool   `json:"is_holiday"`
+	AMState    string `json:"am_state"`
+	PMState    string `json:"pm_state"`
+	AMOverride string `json:"am_override"`
+	PMOverride string `json:"pm_override"`
 }
 
 // YearSummary is the full payload returned to the frontend.
+// Totals are expressed in days with half-day granularity (e.g. 12.5).
 type YearSummary struct {
 	Year          int          `json:"year"`
 	Days          []DaySummary `json:"days"`
 	Holidays      []Holiday    `json:"holidays"`
-	TotalWorked   int          `json:"total_worked"`   // worked = not weekend, not holiday, not leave
-	TotalRemote   int          `json:"total_remote"`   // remote among worked days
-	TotalOnSite   int          `json:"total_on_site"`  // on-site among worked days
+	TotalWorked   float64      `json:"total_worked"`   // worked = not weekend, not holiday, not leave
+	TotalRemote   float64      `json:"total_remote"`   // remote among worked halves
+	TotalOnSite   float64      `json:"total_on_site"`  // on-site among worked halves
+	TotalLeave    float64      `json:"total_leave"`    // leave halves on working days
 	RemotePct     float64      `json:"remote_pct"`     // TotalRemote / TotalWorked * 100
 	OnSitePct     float64      `json:"on_site_pct"`
-	DaysToRecover int          `json:"days_to_recover"` // on-site days needed to reach 60% on-site (= ≤40% TT)
+	DaysToRecover float64      `json:"days_to_recover"` // on-site halves (in days) to reach ≤40% TT
 	OverThreshold bool         `json:"over_threshold"`  // remote_pct > 40
 }
 

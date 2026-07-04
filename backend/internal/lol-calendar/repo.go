@@ -87,6 +87,11 @@ func (r *Repo) Upsert(matches []Match, email string) error {
 				$15, $16, $17, $18, $19, $20
 			)
 			ON CONFLICT (match_id, user_email) DO UPDATE SET
+				league_name   = EXCLUDED.league_name,
+				league_slug   = EXCLUDED.league_slug,
+				scheduled_at  = EXCLUDED.scheduled_at,
+				stage         = EXCLUDED.stage,
+				best_of       = EXCLUDED.best_of,
 				state         = EXCLUDED.state,
 				team1_name    = EXCLUDED.team1_name,
 				team1_code    = EXCLUDED.team1_code,

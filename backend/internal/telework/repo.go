@@ -57,13 +57,14 @@ func (r *Repo) SavePreset(p Preset, email string) error {
 	return err
 }
 
-// GetOverrides returns all per-day overrides for a given year and user.
-func (r *Repo) GetOverrides(year int, email string) (map[string]string, error) {
+// GetOverrides returns all per-day overrides for a given year and user,
+// keyed by YYYY-MM-DD, each holding the AM and PM half-day types.
+func (r *Repo) GetOverrides(year int, email string) (map[string]Override, error) {
 	if err := r.requireDB(); err != nil {
-		return map[string]string{}, nil
+		return map[string]Override{}, nil
 	}
 	rows, err := r.db.Query(
-		`SELECT override_date, type FROM telework_overrides WHERE year = $1 AND user_email = $2`,
+		`SELECT override_date, am_type, pm_type FROM telework_overrides WHERE year = $1 AND user_email = $2`,
 		year, email,
 	)
 	if err != nil {
@@ -71,21 +72,23 @@ func (r *Repo) GetOverrides(year int, email string) (map[string]string, error) {
 	}
 	defer rows.Close()
 
-	result := make(map[string]string)
+	result := make(map[string]Override)
 	for rows.Next() {
 		var d time.Time
-		var t string
-		if err := rows.Scan(&d, &t); err != nil {
+		var am, pm string
+		if err := rows.Scan(&d, &am, &pm); err != nil {
 			return nil, err
 		}
-		result[d.Format("2006-01-02")] = t
+		date := d.Format("2006-01-02")
+		result[date] = Override{Date: date, AM: am, PM: pm}
 	}
 	return result, nil
 }
 
 // BulkSetOverrides replaces all overrides for a year for the given user.
-// Each entry in overrides maps a YYYY-MM-DD date to a type ("leave","remote","office").
-func (r *Repo) BulkSetOverrides(year int, overrides map[string]string, email string) error {
+// Each entry maps a YYYY-MM-DD date to its AM/PM half-day types. An entry where
+// both halves are empty is skipped (means "follow preset").
+func (r *Repo) BulkSetOverrides(year int, overrides map[string]Override, email string) error {
 	if err := r.requireDB(); err != nil {
 		return err
 	}
@@ -98,22 +101,32 @@ func (r *Repo) BulkSetOverrides(year int, overrides map[string]string, email str
 	if _, err := tx.Exec(`DELETE FROM telework_overrides WHERE year = $1 AND user_email = $2`, year, email); err != nil {
 		return err
 	}
-	for date, typ := range overrides {
+	for date, ov := range overrides {
+		if ov.AM == "" && ov.PM == "" {
+			continue
+		}
+		// Legacy 'type' column stays NOT NULL: use AM, falling back to PM.
+		legacy := ov.AM
+		if legacy == "" {
+			legacy = ov.PM
+		}
 		if _, err := tx.Exec(
-			`INSERT INTO telework_overrides (override_date, year, type, user_email) VALUES ($1, $2, $3, $4)
-			 ON CONFLICT (override_date, user_email) DO UPDATE SET type = $3`,
-			date, year, typ, email,
+			`INSERT INTO telework_overrides (override_date, year, type, am_type, pm_type, user_email)
+			 VALUES ($1, $2, $3, $4, $5, $6)
+			 ON CONFLICT (override_date, user_email) DO UPDATE SET type = $3, am_type = $4, pm_type = $5`,
+			date, year, legacy, ov.AM, ov.PM, email,
 		); err != nil {
 			return err
 		}
 	}
 
-	// Keep telework_leaves in sync for backward compatibility.
+	// Keep telework_leaves in sync for backward compatibility: a date is a "leave"
+	// only if the whole day is leave.
 	if _, err := tx.Exec(`DELETE FROM telework_leaves WHERE year = $1 AND user_email = $2`, year, email); err != nil {
 		return err
 	}
-	for date, typ := range overrides {
-		if typ == "leave" {
+	for date, ov := range overrides {
+		if ov.AM == "leave" && ov.PM == "leave" {
 			if _, err := tx.Exec(
 				`INSERT INTO telework_leaves (leave_date, year, user_email) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
 				date, year, email,
