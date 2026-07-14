@@ -10,14 +10,41 @@ import (
 	"helloauth/internal/auth"
 )
 
+// RateSetter writes a per-asset projection rate override without the portfolio
+// package depending on the projection package. Implemented by projection.Repo.
+// defaultRate seeds the computed rate when the row is created, so clearing the
+// override later falls back to the type default rather than 0.
+type RateSetter interface {
+	SetAssetRateOverride(key, label string, defaultRate float64, override *float64) error
+}
+
 // Handler exposes HTTP handlers for the /api/portfolio/* routes.
 type Handler struct {
-	repo *Repo
-	svc  *Service
+	repo  *Repo
+	svc   *Service
+	rates RateSetter // optional; persists per-asset rate overrides from the asset modal
 }
 
 func NewHandler(repo *Repo, svc *Service) *Handler {
 	return &Handler{repo: repo, svc: svc}
+}
+
+// SetRateSetter wires the projection rate writer used by the asset modal.
+func (h *Handler) SetRateSetter(rs RateSetter) {
+	h.rates = rs
+}
+
+// applyAssetRate persists the per-asset rate override for editable single-asset
+// types. rate is the raw JSON value from the modal (nil = leave/clear).
+func (h *Handler) applyAssetRate(assetType, name string, assetID int, rate *float64) {
+	def, ok := defaultSingleRate(assetType)
+	if h.rates == nil || !ok {
+		return
+	}
+	key := accountRateKey(assetType, assetID)
+	if err := h.rates.SetAssetRateOverride(key, name, def, rate); err != nil {
+		log.Printf("set asset rate %s: %v", key, err)
+	}
 }
 
 // RegisterRoutes attaches all portfolio routes to mux.
@@ -62,6 +89,7 @@ func (h *Handler) createAsset(w http.ResponseWriter, r *http.Request, email stri
 	var body struct {
 		Asset
 		Dette *DetteInfo `json:"dette"`
+		Rate  *float64   `json:"rate"` // per-asset projection rate override (%/an)
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "invalid body", http.StatusBadRequest)
@@ -83,6 +111,7 @@ func (h *Handler) createAsset(w http.ResponseWriter, r *http.Request, email stri
 			return
 		}
 	}
+	h.applyAssetRate(body.Type, body.Name, id, body.Rate)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]int{"id": id})
@@ -97,6 +126,7 @@ func (h *Handler) updateAsset(w http.ResponseWriter, r *http.Request, email stri
 	var body struct {
 		Asset
 		Dette *DetteInfo `json:"dette"`
+		Rate  *float64   `json:"rate"` // per-asset projection rate override (%/an)
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "invalid body", http.StatusBadRequest)
@@ -113,6 +143,7 @@ func (h *Handler) updateAsset(w http.ResponseWriter, r *http.Request, email stri
 			return
 		}
 	}
+	h.applyAssetRate(body.Type, body.Name, id, body.Rate)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -270,6 +301,11 @@ func (h *Handler) summary(w http.ResponseWriter, r *http.Request, email string) 
 		apiError(w, err, http.StatusInternalServerError)
 		return
 	}
+	dayChanges, err := h.repo.GetTickerDayChanges()
+	if err != nil {
+		apiError(w, err, http.StatusInternalServerError)
+		return
+	}
 	categories, err := h.repo.GetTickerCategories(email)
 	if err != nil {
 		apiError(w, err, http.StatusInternalServerError)
@@ -281,7 +317,7 @@ func (h *Handler) summary(w http.ResponseWriter, r *http.Request, email string) 
 		return
 	}
 	lastRefresh, _ := h.repo.GetLastRefreshTime()
-	jsonOK(w, h.svc.ComputeSummary(assets, holdings, prices, categories, dettes, lastRefresh))
+	jsonOK(w, h.svc.ComputeSummary(assets, holdings, prices, dayChanges, categories, dettes, lastRefresh))
 }
 
 func (h *Handler) forceRefresh(w http.ResponseWriter, r *http.Request, _ string) {

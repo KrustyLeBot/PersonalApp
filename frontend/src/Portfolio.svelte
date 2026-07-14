@@ -34,6 +34,7 @@
     livret:     'Livret',
     crypto:     'Crypto',
     bourse:     'Bourse',
+    structure:  'Produit structuré',
     dette:      'Dette',
   };
   const COLORS = ['#60a5fa','#34d399','#f59e0b','#a78bfa','#f87171','#38bdf8','#fb923c','#4ade80'];
@@ -87,6 +88,14 @@
 
   function fmtShares(v, hidden = confidential) {
     return hidden ? '••' : v;
+  }
+
+  // Intraday variation is a percentage, not a monetary amount, so it stays
+  // visible in confidential mode.
+  function fmtChange(pct) {
+    if (pct == null) return '—';
+    const sign = pct > 0 ? '+' : '';
+    return `${sign}${pct.toFixed(2)}%`;
   }
 
   function renderCharts() {
@@ -174,6 +183,13 @@
     return groups;
   }
 
+  function toggleProjection() {
+    showProjection = !showProjection;
+    // Coming back to the charts view remounts the canvases; redraw once the
+    // {:else} block is in the DOM (Chart.js needs a live canvas element).
+    if (!showProjection) setTimeout(renderCharts, 50);
+  }
+
   function openCreateAsset() { editingAsset = null; showAssetModal = true; }
   function openEditAsset(a)  { editingAsset = { ...a }; showAssetModal = true; }
   function openHoldings(a)   { selectedAccount = a; showHoldingsModal = true; }
@@ -190,7 +206,51 @@
   async function deleteAsset(id) {
     if (!confirm('Supprimer cet actif et toutes ses positions ?')) return;
     await fetch(`/api/portfolio/assets/${id}`, { method: 'DELETE' });
+    showAssetModal = false;
     await loadSummary();
+  }
+
+  // --- Projection rate editing (shared PUT to the rate-override endpoint) ---
+  let savingRate = {}; // key → bool
+
+  async function saveRateOverride(key, raw) {
+    savingRate[key] = true; savingRate = savingRate;
+    try {
+      const rate = raw === '' || raw == null ? null : parseFloat(raw);
+      await fetch(`/api/portfolio/projection/rates/${encodeURIComponent(key)}/rate-override`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rate }),
+      });
+      await loadSummary();
+    } finally {
+      savingRate[key] = false; savingRate = savingRate;
+    }
+  }
+
+  // Per-category CAGR (bourse) and per-asset rates share the same shape:
+  // { key, rate, override }. The input map is keyed by projection key.
+  let categoryOverride = {}; // key → input string ('' = auto)
+  $: if (summary?.category_rates) {
+    categoryOverride = Object.fromEntries(
+      summary.category_rates.map((c) => [c.key, c.override != null ? String(c.override) : ''])
+    );
+  }
+
+  const assetNameById = (id) => (summary?.assets || []).find((a) => a.id === id)?.name ?? '';
+  const assetTypeById = (id) => (summary?.assets || []).find((a) => a.id === id)?.type ?? '';
+
+  // Effective per-asset rate to preload the modal (null when unset).
+  function assetRateForModal(id) {
+    const r = (summary?.account_rates || []).find((x) => x.asset_id === id);
+    return r?.is_set ? r.rate : null;
+  }
+
+  let assetOverride = {}; // key → input string ('' = unset)
+  $: if (summary?.account_rates) {
+    assetOverride = Object.fromEntries(
+      summary.account_rates.map((a) => [a.key, a.is_set ? String(a.rate) : ''])
+    );
   }
 
   $: groups = groupByType(summary?.assets);
@@ -224,7 +284,7 @@
           {refreshing ? 'Rafraîchissement...' : '↻ Rafraîchir cotations'}
         </button>
         <button class="btn-primary" on:click={openCreateAsset}>+ Ajouter un actif</button>
-        <button class="btn-projection {showProjection ? 'active' : ''}" on:click={() => showProjection = !showProjection}>
+        <button class="btn-projection {showProjection ? 'active' : ''}" on:click={toggleProjection}>
           📈 Projection
         </button>
       </div>
@@ -234,8 +294,7 @@
       <div class="projection-section">
         <ProjectionPanel {confidential} />
       </div>
-    {/if}
-
+    {:else}
     <!-- Charts -->
     <div class="charts-row">
       <div class="chart-card">
@@ -257,6 +316,65 @@
         </div>
       {/if}
     </div>
+
+    <!-- Projection rates: per-asset (left) + per-category CAGR (right).
+         Both cards share the same height (stretch) so they line up. -->
+    {#if (summary.account_rates || []).length > 0 || (summary.category_rates || []).length > 0}
+      <div class="rates-row">
+        <div class="rate-block">
+          <h3>Taux par actif</h3>
+          {#if (summary.account_rates || []).length > 0}
+            {#each summary.account_rates as a (a.key)}
+              <div class="rate-line">
+                <span class="rate-name">{assetNameById(a.asset_id)}<span class="rate-sub">{TYPE_LABELS[assetTypeById(a.asset_id)] || assetTypeById(a.asset_id)}</span></span>
+                <span class="rate-badge" class:override={a.is_set}>
+                  {a.is_set ? `${a.rate.toFixed(2)} %/an` : 'non défini'}
+                </span>
+                <input
+                  class="rate-input"
+                  type="number" step="0.1" min="0" max="100" placeholder="0"
+                  value={assetOverride[a.key]}
+                  on:input={(e) => { assetOverride[a.key] = e.currentTarget.value; }}
+                  data-form-type="other" data-lpignore="true" autocomplete="off"
+                />
+                <button class="rate-btn" disabled={savingRate[a.key]}
+                  on:click={() => saveRateOverride(a.key, assetOverride[a.key])}
+                >{savingRate[a.key] ? '…' : 'OK'}</button>
+              </div>
+            {/each}
+          {:else}
+            <p class="rate-empty">Aucun actif à taux fixe.</p>
+          {/if}
+        </div>
+
+        <div class="rate-block">
+          <h3>CAGR par catégorie</h3>
+          {#if (summary.category_rates || []).length > 0}
+            {#each summary.category_rates as c (c.key)}
+              <div class="rate-line">
+                <span class="rate-name">{c.category}</span>
+                <span class="rate-badge" class:override={c.override != null}>
+                  {(c.override ?? c.rate).toFixed(2)} %/an
+                  {#if c.override != null}<span class="rate-auto">(auto {c.rate.toFixed(2)})</span>{/if}
+                </span>
+                <input
+                  class="rate-input"
+                  type="number" step="0.1" min="0" max="100" placeholder="auto"
+                  value={categoryOverride[c.key]}
+                  on:input={(e) => { categoryOverride[c.key] = e.currentTarget.value; }}
+                  data-form-type="other" data-lpignore="true" autocomplete="off"
+                />
+                <button class="rate-btn" disabled={savingRate[c.key]}
+                  on:click={() => saveRateOverride(c.key, categoryOverride[c.key])}
+                >{savingRate[c.key] ? '…' : 'OK'}</button>
+              </div>
+            {/each}
+          {:else}
+            <p class="rate-empty">Aucune catégorie bourse.</p>
+          {/if}
+        </div>
+      </div>
+    {/if}
 
     <!-- Asset list -->
     <div class="asset-list">
@@ -283,23 +401,24 @@
                         </button>
                         <button class="btn-icon" on:click={() => openEditAsset(a)} title="Renommer">✏️</button>
                       {/if}
-                      <button class="btn-icon danger" on:click={() => deleteAsset(a.id)} title="Supprimer">🗑</button>
                     </div>
                   </div>
 
                   {#if (summary.holdings?.[a.id] || []).length > 0}
                     <table class="holdings-table">
                       <thead>
-                        <tr><th>Ticker</th><th>Parts</th><th>Prix unitaire</th><th>Valeur</th></tr>
+                        <tr><th>Ticker</th><th>Parts</th><th>Prix unitaire</th><th>Var. jour</th><th>Valeur</th></tr>
                       </thead>
                       <tbody>
                         {#each summary.holdings[a.id] as h}
                           {@const price = summary.ticker_prices?.[h.ticker] ?? 0}
                           {@const val = price * h.shares}
+                          {@const change = summary.ticker_day_changes?.[h.ticker]}
                           <tr>
                             <td><code>{h.ticker}</code></td>
                             <td>{fmtShares(h.shares, confidential)}</td>
                             <td>{price > 0 ? fmt(price, confidential) : '—'}</td>
+                            <td class="change-cell {change > 0 ? 'up' : change < 0 ? 'down' : ''}">{fmtChange(change)}</td>
                             <td class="value-cell">{fmt(val, confidential)}</td>
                           </tr>
                         {/each}
@@ -334,7 +453,6 @@
                       {#if !confidential}
                         <button class="btn-icon" on:click={() => openEditAsset(a)} title="Modifier">✏️</button>
                       {/if}
-                      <button class="btn-icon danger" on:click={() => deleteAsset(a.id)} title="Supprimer">🗑</button>
                     </td>
                   </tr>
                 {/each}
@@ -351,6 +469,7 @@
         </div>
       {/if}
     </div>
+    {/if}
   {/if}
 </div>
 
@@ -358,7 +477,9 @@
   <AssetModal
     asset={editingAsset}
     dette={editingAsset ? (summary?.dettes?.[editingAsset.id] ?? null) : null}
+    rate={editingAsset ? assetRateForModal(editingAsset.id) : null}
     on:save={onSaveAsset}
+    on:delete={() => deleteAsset(editingAsset.id)}
     on:close={() => showAssetModal = false}
   />
 {/if}
@@ -418,6 +539,23 @@
   .chart-wrap { position: relative; height: 260px; }
   .no-data { color: #475569; font-size: .85rem; }
 
+  /* Projection rate blocks (per-asset | per-category), equal height */
+  .rates-row { display: flex; gap: 1.5rem; margin-bottom: 2rem; align-items: stretch; }
+  .rate-block { flex: 1; min-width: 0; background: #1e293b; border-radius: 10px; padding: 1.5rem; display: flex; flex-direction: column; gap: .5rem; }
+  .rate-block h3 { margin: 0 0 .5rem; font-size: .9rem; color: #94a3b8; font-weight: 500; text-align: center; }
+  .rate-empty { color: #475569; font-size: .85rem; margin: 0; }
+  .rate-line { display: flex; align-items: center; gap: .5rem; }
+  .rate-name { flex: 1; font-size: .85rem; color: #cbd5e1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rate-sub { display: block; font-size: .72rem; color: #64748b; }
+  .rate-badge { background: #1e3a5f; color: #60a5fa; border-radius: 4px; padding: .15rem .45rem; font-size: .78rem; white-space: nowrap; }
+  .rate-badge.override { background: #1a3a2a; color: #34d399; }
+  .rate-auto { color: #475569; font-size: .7rem; margin-left: .25rem; }
+  .rate-input { width: 4.5rem; background: #0f172a; border: 1px solid #334155; color: #f1f5f9; border-radius: 4px; padding: .25rem .4rem; font-size: .8rem; }
+  .rate-input:focus { outline: none; border-color: #3b82f6; }
+  .rate-btn { background: #1e3a5f; color: #60a5fa; border: none; border-radius: 4px; padding: .25rem .55rem; font-size: .78rem; cursor: pointer; }
+  .rate-btn:hover:not(:disabled) { background: #1d4ed8; color: #fff; }
+  .rate-btn:disabled { opacity: .5; cursor: default; }
+
   .asset-list { display: flex; flex-direction: column; gap: 1.25rem; }
   .group { background: #1e293b; border-radius: 10px; overflow: hidden; }
   .group-header { display: flex; justify-content: space-between; align-items: center; padding: .8rem 1.25rem; border-bottom: 1px solid #334155; }
@@ -454,10 +592,12 @@
   .holdings-table tr:hover td { background: #111f35; }
 
   .value-cell { font-weight: 600; color: #f1f5f9; }
+  .change-cell { font-weight: 600; color: #64748b; font-variant-numeric: tabular-nums; }
+  .change-cell.up   { color: #34d399; }
+  .change-cell.down { color: #f87171; }
   .actions-cell { text-align: right; white-space: nowrap; display: flex; align-items: center; gap: .25rem; }
   .btn-icon { background: none; border: none; cursor: pointer; font-size: 1rem; padding: .2rem .35rem; border-radius: 4px; opacity: .6; }
   .btn-icon:hover { opacity: 1; background: #334155; }
-  .btn-icon.danger:hover { background: #450a0a; }
 
   .no-holdings { padding: .6rem 1.5rem; color: #475569; font-size: .85rem; margin: 0; }
   .link-btn { background: none; border: none; color: #60a5fa; cursor: pointer; font-size: .85rem; padding: 0; text-decoration: underline; }

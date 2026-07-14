@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -189,12 +190,12 @@ func (s *Service) ComputeProjection(
 			continue
 
 		case portfolio.TypeImmobilier:
-			projAssets = append(projAssets, ProjectionAsset{
-				ID: a.ID, Name: a.Name, Type: a.Type,
-				Current: a.Value, Values: flatValues(a.Value),
-				RateKey: "", Rate: 0,
-			})
-			continue
+			currentValue = a.Value
+			rateKey = immobilierKey(a.ID)
+			if r, err := s.repo.EnsureRate(rateKey, a.Name, defaultImmobilierRate); err == nil && r != nil {
+				rateMap[rateKey] = *r
+				appliedRate = r.EffectiveRate()
+			}
 
 		case portfolio.TypeDette:
 			if d, ok := dettes[a.ID]; ok {
@@ -220,15 +221,25 @@ func (s *Service) ComputeProjection(
 
 		case portfolio.TypeFondEuro:
 			currentValue = a.Value
-			rateKey = KeyFondEuro
-			if r, ok := rateMap[rateKey]; ok {
+			rateKey = fondEuroKey(a.ID)
+			if r, err := s.repo.EnsureRate(rateKey, a.Name, defaultFondEuroRate); err == nil && r != nil {
+				rateMap[rateKey] = *r
 				appliedRate = r.EffectiveRate()
 			}
 
 		case portfolio.TypeLivret:
 			currentValue = a.Value
-			rateKey = livretKey(a.Name)
-			if r, ok := rateMap[rateKey]; ok {
+			rateKey = livretKey(a.ID)
+			if r, err := s.repo.EnsureRate(rateKey, a.Name, defaultLivretRate); err == nil && r != nil {
+				rateMap[rateKey] = *r
+				appliedRate = r.EffectiveRate()
+			}
+
+		case portfolio.TypeStructure:
+			currentValue = a.Value
+			rateKey = structureKey(a.ID)
+			if r, err := s.repo.EnsureRate(rateKey, a.Name, defaultStructureRate); err == nil && r != nil {
+				rateMap[rateKey] = *r
 				appliedRate = r.EffectiveRate()
 			}
 
@@ -294,16 +305,15 @@ func (s *Service) ComputeProjection(
 		}
 	}
 
+	// Read from rateMap, which includes lazily-ensured per-asset livret/fond euro
+	// rates in addition to the initial snapshot.
 	var usedRates []Rate
-	seen := make(map[string]struct{})
-	for _, r := range rates {
-		if _, ok := usedKeys[r.Key]; ok {
-			if _, dup := seen[r.Key]; !dup {
-				usedRates = append(usedRates, r)
-				seen[r.Key] = struct{}{}
-			}
+	for key := range usedKeys {
+		if r, ok := rateMap[key]; ok {
+			usedRates = append(usedRates, r)
 		}
 	}
+	sort.Slice(usedRates, func(i, j int) bool { return usedRates[i].Key < usedRates[j].Key })
 
 	return &ProjectionSummary{
 		Years:  projectionYears,
@@ -317,13 +327,24 @@ func tickerKey(ticker string) string {
 	return "ticker_" + ticker
 }
 
-// livretKey maps a livret asset name to livret_a or ldd.
-func livretKey(name string) string {
-	lower := strings.ToLower(name)
-	if strings.Contains(lower, "ldd") || strings.Contains(lower, "ldds") {
-		return KeyLDD
-	}
-	return KeyLivretA
+// livretKey returns the per-asset projection_rates key for a livret.
+func livretKey(assetID int) string {
+	return fmt.Sprintf("livret_%d", assetID)
+}
+
+// fondEuroKey returns the per-asset projection_rates key for a fond euro.
+func fondEuroKey(assetID int) string {
+	return fmt.Sprintf("fond_euro_%d", assetID)
+}
+
+// structureKey returns the per-asset projection_rates key for a structured product.
+func structureKey(assetID int) string {
+	return fmt.Sprintf("structure_%d", assetID)
+}
+
+// immobilierKey returns the per-asset projection_rates key for a real estate property.
+func immobilierKey(assetID int) string {
+	return fmt.Sprintf("immobilier_%d", assetID)
 }
 
 func compoundValues(start, annualRatePct float64) map[int]float64 {

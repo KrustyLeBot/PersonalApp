@@ -1,34 +1,16 @@
 package projection
 
-// Rate keys for non-ticker asset types.
+// Default rates applied when a per-asset livret or fond euro rate has not been
+// set yet. Livrets and fonds euro each get their own editable rate keyed by
+// asset ID (livret_<id> / fond_euro_<id>).
+// Single-asset rates (livret, fond euro, structure, immobilier) are a single
+// manual value the user sets; they default to 0 (flat) until then.
 const (
-	KeyLivretA  = "livret_a"
-	KeyLDD      = "ldd"
-	KeyFondEuro = "fond_euro"
+	defaultLivretRate     = 0
+	defaultFondEuroRate   = 0
+	defaultStructureRate  = 0
+	defaultImmobilierRate = 0
 )
-
-// defaultRates holds the initial rate and source URL for each fixed key.
-// Ticker CAGR entries are seeded separately during daily refresh.
-var defaultRates = map[string]Rate{
-	KeyLivretA: {
-		Key:       KeyLivretA,
-		Label:     "Livret A",
-		Rate:      2.4,
-		SourceURL: "",
-	},
-	KeyLDD: {
-		Key:       KeyLDD,
-		Label:     "LDD",
-		Rate:      2.4,
-		SourceURL: "",
-	},
-	KeyFondEuro: {
-		Key:       KeyFondEuro,
-		Label:     "Fonds Euro (moyenne)",
-		Rate:      2.5,
-		SourceURL: "https://www.linxea.com/assurance-vie/linxea-spirit-2/supports-disponibles-sur-linxea-spirit-2/fonds-euro-linxea-spirit-2-euro-objectif-climat/",
-	},
-}
 
 // Rate stores an annual return rate (in %) and its source for a given key.
 type Rate struct {

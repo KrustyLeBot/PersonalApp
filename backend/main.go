@@ -58,11 +58,11 @@ func main() {
 	projCAGR := projection.NewCAGRClient()
 	projSvc := projection.NewService(projRepo, projCAGR, repo)
 	svc.OnTickerRefresh(projSvc.RefreshTickerCAGRs)
+	// Wire projection rates into the portfolio summary and asset modal.
+	svc.SetRateProvider(projRepo)
+	portfolioHandler.SetRateSetter(projRepo)
 	projHandler := projection.NewHandler(projRepo, projSvc, repo)
 	projHandler.RegisterRoutes(mux)
-	if err := projRepo.SeedDefaults(); err != nil {
-		log.Printf("projection seed defaults: %v", err)
-	}
 	// Populate CAGR rates on first boot if none exist yet.
 	go projSvc.BootstrapCAGRs()
 

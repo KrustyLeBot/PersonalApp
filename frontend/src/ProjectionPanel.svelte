@@ -12,8 +12,6 @@
   let data = null;
   let loading = true;
   let error = '';
-  let saving = {};
-  let saveError = {};
 
   let chartEl;
   let chart;
@@ -25,10 +23,11 @@
     livret:     'Livret',
     crypto:     'Crypto',
     bourse:     'Bourse',
+    structure:  'Produit structuré',
+    dette:      'Dette',
   };
 
-  const FLAT_TYPES = new Set(['immobilier', 'crypto']);
-  const EDITABLE_KEYS = new Set(['livret_a', 'ldd', 'fond_euro']);
+  const FLAT_TYPES = new Set(['crypto', 'dette']);
 
   const LINE_COLORS = [
     '#60a5fa','#34d399','#f59e0b','#a78bfa','#f87171',
@@ -44,12 +43,6 @@
       const res = await fetch('/api/portfolio/projection/summary');
       if (!res.ok) throw new Error(await res.text());
       data = await res.json();
-      editableRates = Object.fromEntries(
-        (data.rates || []).map(r => [r.key, { rate: r.rate }])
-      );
-      overrideRates = Object.fromEntries(
-        (data.rates || []).map(r => [r.key, r.rate_override != null ? String(r.rate_override) : ''])
-      );
       // Wait for Svelte to render the canvas (loading becomes false), then draw.
       await tick();
       renderChart();
@@ -60,51 +53,6 @@
       // tick again after loading=false so canvas is in DOM
       await tick();
       renderChart();
-    }
-  }
-
-  let editableRates = {};
-  let overrideRates = {};    // key → string input value (empty = clear)
-  let savingOverride = {};
-  let overrideError = {};
-
-  async function saveRateOverride(key) {
-    savingOverride[key] = true; savingOverride = savingOverride;
-    overrideError[key] = ''; overrideError = overrideError;
-    try {
-      const raw = overrideRates[key];
-      const rate = raw === '' ? null : parseFloat(raw);
-      const res = await fetch(`/api/portfolio/projection/rates/${encodeURIComponent(key)}/rate-override`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rate }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      await load();
-    } catch (e) {
-      overrideError[key] = e.message;
-      overrideError = overrideError;
-    } finally {
-      savingOverride[key] = false; savingOverride = savingOverride;
-    }
-  }
-
-  async function saveRate(key) {
-    saving[key] = true; saving = saving;
-    saveError[key] = ''; saveError = saveError;
-    try {
-      const res = await fetch(`/api/portfolio/projection/rates/${encodeURIComponent(key)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editableRates[key]),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      await load();
-    } catch (e) {
-      saveError[key] = e.message;
-      saveError = saveError;
-    } finally {
-      saving[key] = false; saving = saving;
     }
   }
 
@@ -209,9 +157,6 @@
     });
   }
 
-  $: editableRateList = (data?.rates || []).filter(r => EDITABLE_KEYS.has(r.key));
-  $: readonlyRateList  = (data?.rates || []).filter(r => !EDITABLE_KEYS.has(r.key));
-
   $: total0  = (data?.assets || []).reduce((s, a) => s + a.current, 0);
   $: total5  = (data?.assets || []).reduce((s, a) => s + (a.values?.['5']  ?? a.current), 0);
   $: total10 = (data?.assets || []).reduce((s, a) => s + (a.values?.['10'] ?? a.current), 0);
@@ -279,86 +224,6 @@
       </table>
     </div>
 
-    <!-- Editable rates -->
-    <div class="rates-section">
-      <h3>Taux de rendement</h3>
-      <p class="rates-hint">Modifiez les taux utilisés pour les projections.</p>
-      <div class="rates-grid">
-        {#each editableRateList as rate (rate.key)}
-          <div class="rate-card">
-            <div class="rate-label">{rate.label}</div>
-            <div class="rate-fields">
-              <label class="field-group">
-                <span>Taux (%/an)</span>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  max="100"
-                  bind:value={editableRates[rate.key].rate}
-                />
-              </label>
-            </div>
-            {#if saveError[rate.key]}
-              <div class="save-error">{saveError[rate.key]}</div>
-            {/if}
-            <button
-              class="btn-save"
-              disabled={saving[rate.key]}
-              on:click={() => saveRate(rate.key)}
-            >
-              {saving[rate.key] ? 'Sauvegarde...' : 'Sauvegarder'}
-            </button>
-          </div>
-        {/each}
-      </div>
-    </div>
-
-    <!-- Read-only CAGR rates (tickers + synthetics) -->
-    {#if readonlyRateList.length > 0}
-      <div class="rates-section readonly-section">
-        <h3>CAGR calculés</h3>
-        <p class="rates-hint">Rendements annualisés calculés depuis l'historique Yahoo Finance. Mis à jour à chaque refresh.</p>
-        <div class="readonly-grid">
-          {#each readonlyRateList as rate (rate.key)}
-            <div class="readonly-card">
-              <div class="readonly-top">
-                <span class="readonly-label">{rate.label}</span>
-                <div class="rate-badges">
-                  {#if rate.rate_override != null}
-                    <span class="rate-badge override-active" title="Override actif">{rate.rate_override.toFixed(2)} %/an</span>
-                    <span class="rate-badge computed" title="CAGR calculé">{rate.rate.toFixed(2)} %/an calculé</span>
-                  {:else}
-                    <span class="rate-badge">{rate.rate.toFixed(2)} %/an</span>
-                  {/if}
-                </div>
-              </div>
-              <div class="override-row">
-                <input
-                  class="override-input"
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  max="100"
-                  placeholder="Override % (vide = auto)"
-                  bind:value={overrideRates[rate.key]}
-                />
-                <button
-                  class="btn-override"
-                  disabled={savingOverride[rate.key]}
-                  on:click={() => saveRateOverride(rate.key)}
-                >
-                  {savingOverride[rate.key] ? '...' : 'OK'}
-                </button>
-              </div>
-              {#if overrideError[rate.key]}
-                <div class="save-error">{overrideError[rate.key]}</div>
-              {/if}
-            </div>
-          {/each}
-        </div>
-      </div>
-    {/if}
   {/if}
 </div>
 
@@ -389,40 +254,4 @@
 
   .total-row td { font-weight: 700; color: #f1f5f9; border-top: 2px solid #334155; }
   .total-row .projected { color: #34d399; }
-
-  /* Editable rates */
-  .rates-section { margin-bottom: 2rem; }
-  .rates-section h3 { margin: 0 0 .35rem; font-size: .95rem; color: #e2e8f0; }
-  .rates-hint { margin: 0 0 1rem; font-size: .82rem; color: #64748b; }
-
-  .rates-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
-  .rate-card { background: #1e293b; border-radius: 8px; padding: 1rem; display: flex; flex-direction: column; gap: .65rem; }
-  .rate-label { font-weight: 600; color: #e2e8f0; font-size: .9rem; }
-
-  .rate-fields { display: flex; gap: .5rem; align-items: flex-end; flex-wrap: wrap; }
-  .field-group { display: flex; flex-direction: column; gap: .25rem; font-size: .78rem; color: #64748b; }
-  .field-group input { background: #0f172a; border: 1px solid #334155; color: #f1f5f9; border-radius: 5px; padding: .35rem .6rem; font-size: .88rem; width: 100%; box-sizing: border-box; }
-  .field-group input:focus { outline: none; border-color: #3b82f6; }
-  .save-error { color: #f87171; font-size: .78rem; }
-
-  .btn-save { align-self: flex-start; background: #1d4ed8; color: #fff; border: none; padding: .4rem .85rem; border-radius: 5px; font-size: .83rem; cursor: pointer; }
-  .btn-save:hover:not(:disabled) { background: #2563eb; }
-  .btn-save:disabled { opacity: .5; cursor: default; }
-
-  /* Read-only CAGR section */
-  .readonly-section { border-top: 1px solid #1e293b; padding-top: 1.5rem; }
-  .readonly-grid { display: flex; flex-wrap: wrap; gap: .6rem; }
-  .readonly-card { background: #0f172a; border: 1px solid #1e293b; border-radius: 6px; padding: .5rem .75rem; display: flex; flex-direction: column; gap: .4rem; min-width: 220px; }
-  .readonly-top { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
-  .readonly-label { font-size: .82rem; color: #94a3b8; flex: 1; }
-  .rate-badges { display: flex; gap: .3rem; flex-wrap: wrap; }
-  .rate-badge.override-active { background: #1a3a2a; color: #34d399; }
-  .rate-badge.computed { background: #1e293b; color: #475569; font-size: .72rem; }
-  .override-row { display: flex; gap: .35rem; align-items: center; }
-  .override-input { flex: 1; background: #1e293b; border: 1px solid #334155; color: #f1f5f9; border-radius: 4px; padding: .25rem .5rem; font-size: .78rem; min-width: 0; }
-  .override-input:focus { outline: none; border-color: #3b82f6; }
-  .override-input::placeholder { color: #475569; }
-  .btn-override { background: #1e3a5f; color: #60a5fa; border: none; border-radius: 4px; padding: .25rem .55rem; font-size: .78rem; cursor: pointer; white-space: nowrap; }
-  .btn-override:hover:not(:disabled) { background: #1d4ed8; color: #fff; }
-  .btn-override:disabled { opacity: .5; cursor: default; }
 </style>

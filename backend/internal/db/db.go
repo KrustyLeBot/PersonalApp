@@ -61,8 +61,11 @@ func (d *Database) Migrate() error {
 			ticker     VARCHAR(20)   PRIMARY KEY,
 			price      DECIMAL(15,4) NOT NULL,
 			currency   VARCHAR(10)   DEFAULT 'EUR',
+			day_open   DECIMAL(15,4) NOT NULL DEFAULT 0,
 			updated_at TIMESTAMPTZ   DEFAULT NOW()
 		);
+
+		ALTER TABLE ticker_prices ADD COLUMN IF NOT EXISTS day_open DECIMAL(15,4) NOT NULL DEFAULT 0;
 
 		-- Shared by bourse and crypto assets (any type that holds ticker positions).
 		-- Renamed from bourse_holdings — migrate existing data if the old table exists.

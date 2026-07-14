@@ -122,13 +122,14 @@ func (r *Repo) GetSchedule(pastDays int, email string) ([]Match, error) {
 	cutoff := time.Now().UTC().AddDate(0, 0, -pastDays)
 	rows, err := r.db.Query(`
 		SELECT
-			match_id, league_name, league_slug,
-			team1_name, team1_code, team1_image, team1_wins, team1_outcome,
-			team2_name, team2_code, team2_image, team2_wins, team2_outcome,
-			scheduled_at, stage, best_of, state, is_spoiler, spoiler_dismissed, fetched_at
-		FROM lol_matches
-		WHERE scheduled_at >= $1 AND user_email = $2
-		ORDER BY scheduled_at ASC
+			m.match_id, m.league_name, m.league_slug,
+			m.team1_name, m.team1_code, m.team1_image, m.team1_wins, m.team1_outcome,
+			m.team2_name, m.team2_code, m.team2_image, m.team2_wins, m.team2_outcome,
+			m.scheduled_at, m.stage, m.best_of, m.state, m.is_spoiler, m.spoiler_dismissed, m.fetched_at
+		FROM lol_matches m
+		JOIN lol_leagues l ON l.slug = m.league_slug AND l.user_email = m.user_email AND l.enabled = TRUE
+		WHERE m.scheduled_at >= $1 AND m.user_email = $2
+		ORDER BY m.scheduled_at ASC
 	`, cutoff, email)
 	if err != nil {
 		return nil, err
@@ -159,13 +160,14 @@ func (r *Repo) GetLiveWindow(window time.Duration, email string) ([]Match, error
 	to := now.Add(window)
 	rows, err := r.db.Query(`
 		SELECT
-			match_id, league_name, league_slug,
-			team1_name, team1_code, team1_image, team1_wins, team1_outcome,
-			team2_name, team2_code, team2_image, team2_wins, team2_outcome,
-			scheduled_at, stage, best_of, state, is_spoiler, spoiler_dismissed, fetched_at
-		FROM lol_matches
-		WHERE user_email = $1 AND (state = 'inProgress' OR (scheduled_at >= $2 AND scheduled_at <= $3))
-		ORDER BY scheduled_at ASC
+			m.match_id, m.league_name, m.league_slug,
+			m.team1_name, m.team1_code, m.team1_image, m.team1_wins, m.team1_outcome,
+			m.team2_name, m.team2_code, m.team2_image, m.team2_wins, m.team2_outcome,
+			m.scheduled_at, m.stage, m.best_of, m.state, m.is_spoiler, m.spoiler_dismissed, m.fetched_at
+		FROM lol_matches m
+		JOIN lol_leagues l ON l.slug = m.league_slug AND l.user_email = m.user_email AND l.enabled = TRUE
+		WHERE m.user_email = $1 AND (m.state = 'inProgress' OR (m.scheduled_at >= $2 AND m.scheduled_at <= $3))
+		ORDER BY m.scheduled_at ASC
 	`, email, from, to)
 	if err != nil {
 		return nil, err

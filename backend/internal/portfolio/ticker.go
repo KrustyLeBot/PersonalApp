@@ -61,7 +61,9 @@ func (c *TickerClient) FetchPrices(tickers []string) (map[string]TickerPrice, er
 }
 
 func (c *TickerClient) fetchOne(ticker string) (TickerPrice, error) {
-	url := fmt.Sprintf("https://query1.finance.yahoo.com/v8/finance/chart/%s", ticker)
+	// range=1d&interval=1d yields the day's open in indicators.quote[0].open[0],
+	// which is the first quotation of the current trading day.
+	url := fmt.Sprintf("https://query1.finance.yahoo.com/v8/finance/chart/%s?range=1d&interval=1d", ticker)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return TickerPrice{}, err
@@ -91,10 +93,16 @@ func (c *TickerClient) fetchOne(ticker string) (TickerPrice, error) {
 		return TickerPrice{}, fmt.Errorf("no data for ticker %s", ticker)
 	}
 
-	meta := parsed.Chart.Result[0].Meta
+	result := parsed.Chart.Result[0]
+	meta := result.Meta
+	var dayOpen float64
+	if len(result.Indicators.Quote) > 0 && len(result.Indicators.Quote[0].Open) > 0 {
+		dayOpen = result.Indicators.Quote[0].Open[0]
+	}
 	return TickerPrice{
 		Ticker:   ticker,
 		Price:    meta.RegularMarketPrice,
 		Currency: meta.Currency,
+		DayOpen:  dayOpen,
 	}, nil
 }

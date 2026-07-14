@@ -227,11 +227,34 @@ func (r *Repo) SaveTickerPrice(p TickerPrice) error {
 		return err
 	}
 	_, err := r.db.Exec(`
-		INSERT INTO ticker_prices (ticker, price, currency, updated_at)
-		VALUES ($1, $2, $3, NOW())
-		ON CONFLICT (ticker) DO UPDATE SET price = $2, currency = $3, updated_at = NOW()
-	`, p.Ticker, p.Price, p.Currency)
+		INSERT INTO ticker_prices (ticker, price, currency, day_open, updated_at)
+		VALUES ($1, $2, $3, $4, NOW())
+		ON CONFLICT (ticker) DO UPDATE SET price = $2, currency = $3, day_open = $4, updated_at = NOW()
+	`, p.Ticker, p.Price, p.Currency, p.DayOpen)
 	return err
+}
+
+// GetTickerDayChanges returns a map of ticker → intraday variation vs the day's
+// first quotation, in percent. Tickers without a known open price are omitted.
+func (r *Repo) GetTickerDayChanges() (map[string]float64, error) {
+	if err := r.requireDB(); err != nil {
+		return nil, err
+	}
+	rows, err := r.db.Query(`SELECT ticker, price, day_open FROM ticker_prices WHERE day_open > 0`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	changes := make(map[string]float64)
+	for rows.Next() {
+		var ticker string
+		var price, dayOpen float64
+		if err := rows.Scan(&ticker, &price, &dayOpen); err == nil && dayOpen > 0 {
+			changes[ticker] = (price - dayOpen) / dayOpen * 100
+		}
+	}
+	return changes, nil
 }
 
 func (r *Repo) GetTickerPrices() (map[string]float64, error) {

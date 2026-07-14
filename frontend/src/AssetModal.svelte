@@ -3,8 +3,13 @@
 
   export let asset = null;
   export let dette = null; // existing DetteInfo if editing a dette asset
+  export let rate = null;  // per-asset projection rate override (%/an), null = auto/default
 
   const dispatch = createEventDispatcher();
+
+  // Types whose projection rate is a single editable value on the asset itself.
+  // Bourse/crypto rates are computed per category and edited on the portfolio page.
+  const RATED_TYPES = new Set(['livret', 'fond_euro', 'structure', 'immobilier']);
 
   const TYPES = [
     { value: 'immobilier', label: 'Immobilier' },
@@ -12,6 +17,7 @@
     { value: 'livret',     label: 'Livret' },
     { value: 'crypto',     label: 'Crypto (compte/wallet)' },
     { value: 'bourse',     label: 'Bourse (compte)' },
+    { value: 'structure',  label: 'Produit structuré' },
     { value: 'dette',      label: 'Dette / Emprunt' },
   ];
 
@@ -25,6 +31,10 @@
 
   $: isTickerBased = form.type === 'bourse' || form.type === 'crypto';
   $: isDette = form.type === 'dette';
+  $: isRated = RATED_TYPES.has(form.type);
+
+  // Rate input as a string so an empty field means "auto/default" (send null).
+  let rateInput = rate != null ? String(rate) : '';
 
   // Compute monthly payment reactively for preview
   $: monthlyPayment = (() => {
@@ -54,6 +64,10 @@
         amount_borrowed: Number(detteForm.amount_borrowed),
       };
     }
+    if (isRated) {
+      // type="number" binds to a number (or null/'' when empty).
+      payload.rate = rateInput === '' || rateInput == null ? null : Number(rateInput);
+    }
     dispatch('save', payload);
   }
 </script>
@@ -75,9 +89,10 @@
       Nom
       <input type="text" bind:value={form.name}
         placeholder={
-          isDette       ? 'Ex: Prêt immobilier, Crédit auto…' :
-          isTickerBased ? (form.type === 'crypto' ? 'Ex: Binance, Ledger…' : 'Ex: PEA Fortuneo, CTO IBKR…') :
-                          'Ex: Appartement Paris, Livret A…'
+          isDette          ? 'Ex: Prêt immobilier, Crédit auto…' :
+          isTickerBased    ? (form.type === 'crypto' ? 'Ex: Binance, Ledger…' : 'Ex: PEA Fortuneo, CTO IBKR…') :
+          form.type === 'structure' ? 'Ex: Produit structuré CAC 40…' :
+                             'Ex: Appartement Paris, Livret A…'
         } />
     </label>
 
@@ -122,7 +137,25 @@
       </label>
     {/if}
 
+    {#if isRated}
+      <label>
+        Taux de rendement (%/an)
+        <input
+          type="number"
+          step="0.1"
+          min="0"
+          max="100"
+          bind:value={rateInput}
+          placeholder="0"
+        />
+        <span class="rate-hint">Utilisé pour la projection. Vide = 0 %/an.</span>
+      </label>
+    {/if}
+
     <div class="modal-actions">
+      {#if asset}
+        <button class="btn-delete" on:click={() => dispatch('delete')}>Supprimer</button>
+      {/if}
       <button class="btn-cancel" on:click={() => dispatch('close')}>Annuler</button>
       <button class="btn-save" on:click={save}>Enregistrer</button>
     </div>
@@ -140,11 +173,14 @@
   select:disabled { opacity: .6; cursor: default; }
 
   .hint { background: #0f2744; border: 1px solid #1d4ed8; border-radius: 6px; padding: .75rem 1rem; font-size: .83rem; color: #93c5fd; margin: 0 0 1rem; }
+  .rate-hint { font-size: .74rem; color: #64748b; }
 
   .dette-preview { background: #0f2218; border: 1px solid #166534; border-radius: 6px; padding: .65rem 1rem; font-size: .83rem; color: #86efac; margin-bottom: 1rem; }
   .dette-preview strong { color: #34d399; }
 
   .modal-actions { display: flex; justify-content: flex-end; gap: .75rem; margin-top: 1.5rem; }
+  .btn-delete { margin-right: auto; background: transparent; color: #f87171; border: 1px solid #7f1d1d; padding: .55rem 1.1rem; border-radius: 6px; font-size: .9rem; cursor: pointer; }
+  .btn-delete:hover { background: #7f1d1d; color: #fff; }
   .btn-cancel { background: transparent; color: #94a3b8; border: 1px solid #334155; padding: .55rem 1.1rem; border-radius: 6px; font-size: .9rem; cursor: pointer; }
   .btn-cancel:hover { border-color: #64748b; color: #f1f5f9; }
   .btn-save { background: #3b82f6; color: #fff; border: none; padding: .55rem 1.2rem; border-radius: 6px; font-size: .9rem; cursor: pointer; }

@@ -8,6 +8,7 @@ const (
 	TypeCrypto     = "crypto"
 	TypeBourse     = "bourse"
 	TypeDette      = "dette"
+	TypeStructure  = "structure"
 )
 
 // hasTickerHoldings reports whether the given asset type uses ticker-based positions
@@ -27,6 +28,26 @@ type Asset struct {
 	UpdatedAt string  `json:"updated_at"`
 }
 
+// CategoryRate is the projection rate for a bourse category, editable from the
+// portfolio page. Rate is the auto-computed CAGR; Override is the user value (if any).
+type CategoryRate struct {
+	Category string   `json:"category"`
+	Key      string   `json:"key"`               // projection_rates key (category_<slug> or ticker_<TICKER>)
+	Rate     float64  `json:"rate"`              // computed CAGR (%/an)
+	Override *float64 `json:"override,omitempty"` // user override (%/an), null = auto
+}
+
+// AssetRate is the per-asset projection rate for single-asset types (livret,
+// fond euro, structure, immobilier). It's a single manual value: Rate is the
+// effective rate (%/an, 0 when never set), IsSet distinguishes "set to 0" from
+// "not set" for display.
+type AssetRate struct {
+	AssetID int     `json:"asset_id"`
+	Key     string  `json:"key"`    // projection_rates key (<type>_<id>)
+	Rate    float64 `json:"rate"`   // effective rate (%/an), 0 when unset
+	IsSet   bool    `json:"is_set"` // whether the user has set a value
+}
+
 // Holding is a ticker position inside a bourse or crypto account.
 type Holding struct {
 	ID        int     `json:"id"`
@@ -38,10 +59,22 @@ type Holding struct {
 }
 
 // TickerPrice stores the last known market price for a ticker.
+// DayOpen is the first quotation of the current trading day, used to compute
+// the intraday gain/loss percentage.
 type TickerPrice struct {
 	Ticker   string  `json:"ticker"`
 	Price    float64 `json:"price"`
 	Currency string  `json:"currency"`
+	DayOpen  float64 `json:"day_open"`
+}
+
+// DayChangePct returns the intraday variation vs the day's first quotation, in percent.
+// Returns 0 when the open price is unknown.
+func (p TickerPrice) DayChangePct() float64 {
+	if p.DayOpen == 0 {
+		return 0
+	}
+	return (p.Price - p.DayOpen) / p.DayOpen * 100
 }
 
 // Summary is the aggregated portfolio view returned by the summary endpoint.
@@ -54,7 +87,10 @@ type Summary struct {
 	AccountValues     map[int]float64    `json:"account_values"`     // asset_id → computed value
 	Dettes            map[int]DetteInfo  `json:"dettes"`             // asset_id → dette info
 	TickerPrices      map[string]float64 `json:"ticker_prices"`
+	TickerDayChanges  map[string]float64 `json:"ticker_day_changes"`  // ticker → intraday variation vs day open, in percent
 	TickerCategories  map[string]string  `json:"ticker_categories"`  // ticker → category label
+	AccountRates      []AssetRate        `json:"account_rates"`      // per-asset projection rates for editable single-asset types
+	CategoryRates     []CategoryRate     `json:"category_rates"`     // per-bourse-category projection rates, editable from the page
 	LastRefresh       *string            `json:"last_refresh"`
 }
 
@@ -78,6 +114,11 @@ type yahooChartResponse struct {
 				Currency           string  `json:"currency"`
 				Symbol             string  `json:"symbol"`
 			} `json:"meta"`
+			Indicators struct {
+				Quote []struct {
+					Open []float64 `json:"open"`
+				} `json:"quote"`
+			} `json:"indicators"`
 		} `json:"result"`
 		Error *struct {
 			Code        string `json:"code"`

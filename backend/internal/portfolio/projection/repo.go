@@ -73,22 +73,41 @@ func (r *Repo) SetRateOverride(key string, override *float64) error {
 	return err
 }
 
-// SeedDefaults inserts default rates for keys that don't exist yet.
-func (r *Repo) SeedDefaults() error {
+// SetAssetRateOverride sets (or clears, when override is nil) the rate override
+// for a single-asset key, creating the projection_rates row first if the asset's
+// rate has never been materialised. label and defaultRate are used only when the
+// row is created (defaultRate is the fallback used once the override is cleared).
+// Implements portfolio.RateSetter.
+func (r *Repo) SetAssetRateOverride(key, label string, defaultRate float64, override *float64) error {
 	if !r.db.IsConnected() {
 		return nil
 	}
-	for _, rate := range defaultRates {
-		_, err := r.db.Exec(`
-			INSERT INTO projection_rates (key, label, rate, source_url)
-			VALUES ($1, $2, $3, $4)
-			ON CONFLICT (key) DO NOTHING
-		`, rate.Key, rate.Label, rate.Rate, rate.SourceURL)
-		if err != nil {
-			return err
-		}
+	if _, err := r.db.Exec(`
+		INSERT INTO projection_rates (key, label, rate, source_url)
+		VALUES ($1, $2, $3, '')
+		ON CONFLICT (key) DO NOTHING
+	`, key, label, defaultRate); err != nil {
+		return err
 	}
-	return nil
+	return r.SetRateOverride(key, override)
+}
+
+// EnsureRate inserts a rate with the given defaults if its key does not exist
+// yet, then returns the stored rate (existing or freshly inserted).
+// Used to lazily create per-asset livret/fond euro rates on first projection.
+func (r *Repo) EnsureRate(key, label string, defaultRate float64) (*Rate, error) {
+	if !r.db.IsConnected() {
+		return nil, nil
+	}
+	_, err := r.db.Exec(`
+		INSERT INTO projection_rates (key, label, rate, source_url)
+		VALUES ($1, $2, $3, '')
+		ON CONFLICT (key) DO UPDATE SET label = $2
+	`, key, label, defaultRate)
+	if err != nil {
+		return nil, err
+	}
+	return r.GetRate(key)
 }
 
 // HasCategoryRates reports whether any category_* rates exist in the DB.
@@ -99,6 +118,37 @@ func (r *Repo) HasCategoryRates() bool {
 	var count int
 	r.db.QueryRow(`SELECT COUNT(*) FROM projection_rates WHERE key LIKE 'category_%'`).Scan(&count)
 	return count > 0
+}
+
+// RateOverride returns the user override (%/an) for a key, or nil if none set.
+// Implements portfolio.RateProvider.
+func (r *Repo) RateOverride(key string) (*float64, error) {
+	if !r.db.IsConnected() {
+		return nil, nil
+	}
+	var override sql.NullFloat64
+	err := r.db.QueryRow(`SELECT rate_override FROM projection_rates WHERE key = $1`, key).Scan(&override)
+	if err != nil {
+		return nil, nil
+	}
+	if override.Valid {
+		return &override.Float64, nil
+	}
+	return nil, nil
+}
+
+// ComputedRate returns the auto-computed rate (%/an) for a key and whether it exists.
+// Implements portfolio.RateProvider.
+func (r *Repo) ComputedRate(key string) (float64, bool, error) {
+	if !r.db.IsConnected() {
+		return 0, false, nil
+	}
+	var rate float64
+	err := r.db.QueryRow(`SELECT rate FROM projection_rates WHERE key = $1`, key).Scan(&rate)
+	if err != nil {
+		return 0, false, nil
+	}
+	return rate, true, nil
 }
 
 // GetRate returns a single rate by key.
