@@ -141,12 +141,14 @@
 
 <style>
   :global(*, *::before, *::after) { box-sizing: border-box; }
-  :global(body) {
+  :global(html, body) {
     margin: 0;
     font-family: system-ui, -apple-system, sans-serif;
     background: #0f172a;
     color: #f1f5f9;
     min-height: 100vh;
+    max-width: 100%;
+    overflow-x: hidden;
   }
 
   .splash {
@@ -194,14 +196,23 @@
   .tabbar {
     background: #1e293b; border-bottom: 1px solid #334155;
     display: flex; padding: 0 1.5rem; gap: .25rem;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
   }
   .tab {
     background: none; border: none; color: #94a3b8;
     padding: .75rem 1.2rem; font-size: .95rem; cursor: pointer;
     border-bottom: 2px solid transparent; transition: color .15s, border-color .15s;
+    white-space: nowrap; flex-shrink: 0;
   }
   .tab:hover { color: #f1f5f9; }
   .tab.active { color: #60a5fa; border-bottom-color: #60a5fa; }
 
-  .content { flex: 1; padding: 1.5rem; }
+  .content { flex: 1; padding: 1.5rem; min-width: 0; }
+
+  @media (max-width: 480px) {
+    .statusbar { padding: .5rem .75rem; flex-wrap: wrap; gap: .5rem; }
+    .tabbar { padding: 0 .5rem; }
+    .tab { padding: .65rem .8rem; font-size: .88rem; }
+    .content { padding: 1rem; }
+  }
 </style>

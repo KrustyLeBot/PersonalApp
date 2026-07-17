@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { Chart, ArcElement, PieController, Tooltip, Legend } from 'chart.js';
   import AssetModal from './AssetModal.svelte';
   import HoldingsModal from './HoldingsModal.svelte';
@@ -44,7 +44,21 @@
     await loadSummary();
     // Page is now displayed with cached data; refresh in the background if stale.
     autoRefreshIfStale(summary?.last_refresh, forceRefresh);
+    window.addEventListener('resize', onResize);
   });
+
+  onDestroy(() => window.removeEventListener('resize', onResize));
+
+  // Legend position (right vs bottom) depends on viewport width, so charts
+  // need a redraw when crossing the mobile breakpoint (e.g. device rotation).
+  let wasNarrow = window.innerWidth <= 480;
+  function onResize() {
+    const isNarrow = window.innerWidth <= 480;
+    if (isNarrow !== wasNarrow) {
+      wasNarrow = isNarrow;
+      renderCharts();
+    }
+  }
 
   async function loadSummary() {
     // Only show the full-page loading state on the first load; a refresh-driven
@@ -130,12 +144,13 @@
   }
 
   function chartOptions(denominator) {
+    const isNarrow = window.innerWidth <= 480;
     return {
       maintainAspectRatio: false,
       layout: { padding: 16 },
       plugins: {
         legend: {
-          position: 'right',
+          position: isNarrow ? 'bottom' : 'right',
           labels: { color: '#cbd5e1', font: { size: 12 }, boxWidth: 14, padding: 12 },
           onHover(_, legendItem, legend) {
             const chart = legend.chart;
@@ -496,6 +511,14 @@
 <style>
   .portfolio { max-width: 1100px; margin: 0 auto; }
 
+  @media (max-width: 480px) {
+    .top-actions {
+      width: 100%; flex-wrap: nowrap; overflow-x: auto;
+      -webkit-overflow-scrolling: touch; padding-bottom: .25rem;
+    }
+    .top-actions button { flex: 0 0 auto; white-space: nowrap; }
+  }
+
   .center-msg, .error-msg { text-align: center; padding: 3rem; color: #94a3b8; }
   .error-msg { color: #f87171; }
 
@@ -533,18 +556,18 @@
 
   .projection-section { margin-bottom: 2rem; border-top: 1px solid #334155; padding-top: 1.5rem; }
 
-  .charts-row { display: flex; gap: 1.5rem; margin-bottom: 2rem; }
-  .chart-card { background: #1e293b; border-radius: 10px; padding: 1.5rem; flex: 1; min-width: 0; }
+  .charts-row { display: flex; flex-wrap: wrap; gap: 1.5rem; margin-bottom: 2rem; }
+  .chart-card { background: #1e293b; border-radius: 10px; padding: 1.5rem; flex: 1; min-width: 260px; }
   .chart-card h3 { margin: 0 0 .5rem; font-size: .9rem; color: #94a3b8; font-weight: 500; text-align: center; }
   .chart-wrap { position: relative; height: 260px; }
   .no-data { color: #475569; font-size: .85rem; }
 
   /* Projection rate blocks (per-asset | per-category), equal height */
-  .rates-row { display: flex; gap: 1.5rem; margin-bottom: 2rem; align-items: stretch; }
-  .rate-block { flex: 1; min-width: 0; background: #1e293b; border-radius: 10px; padding: 1.5rem; display: flex; flex-direction: column; gap: .5rem; }
+  .rates-row { display: flex; flex-wrap: wrap; gap: 1.5rem; margin-bottom: 2rem; align-items: stretch; }
+  .rate-block { flex: 1; min-width: 260px; background: #1e293b; border-radius: 10px; padding: 1.5rem; display: flex; flex-direction: column; gap: .5rem; }
   .rate-block h3 { margin: 0 0 .5rem; font-size: .9rem; color: #94a3b8; font-weight: 500; text-align: center; }
   .rate-empty { color: #475569; font-size: .85rem; margin: 0; }
-  .rate-line { display: flex; align-items: center; gap: .5rem; }
+  .rate-line { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
   .rate-name { flex: 1; font-size: .85rem; color: #cbd5e1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .rate-sub { display: block; font-size: .72rem; color: #64748b; }
   .rate-badge { background: #1e3a5f; color: #60a5fa; border-radius: 4px; padding: .15rem .45rem; font-size: .78rem; white-space: nowrap; }
@@ -555,6 +578,16 @@
   .rate-btn { background: #1e3a5f; color: #60a5fa; border: none; border-radius: 4px; padding: .25rem .55rem; font-size: .78rem; cursor: pointer; }
   .rate-btn:hover:not(:disabled) { background: #1d4ed8; color: #fff; }
   .rate-btn:disabled { opacity: .5; cursor: default; }
+
+  @media (max-width: 480px) {
+    .rate-block, .chart-card { flex: 1 1 100%; min-width: 0; padding: 1rem; }
+    .rate-line { gap: .4rem; }
+    .rate-name { flex: 1 1 100%; white-space: normal; }
+    .rate-badge { white-space: normal; }
+    .rate-auto { display: block; margin-left: 0; }
+    .rate-input { width: 3.5rem; }
+    .chart-wrap { height: 320px; }
+  }
 
   .asset-list { display: flex; flex-direction: column; gap: 1.25rem; }
   .group { background: #1e293b; border-radius: 10px; overflow: hidden; }
