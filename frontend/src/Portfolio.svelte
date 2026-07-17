@@ -562,9 +562,11 @@
   .chart-wrap { position: relative; height: 260px; }
   .no-data { color: #475569; font-size: .85rem; }
 
-  /* Projection rate blocks (per-asset | per-category), equal height */
+  /* Projection rate blocks (per-asset | per-category), equal height.
+     min-width 340px keeps a card wide enough to lay out name+badge+input+OK
+     on one line before the row wraps to a single column (~700px total). */
   .rates-row { display: flex; flex-wrap: wrap; gap: 1.5rem; margin-bottom: 2rem; align-items: stretch; }
-  .rate-block { flex: 1; min-width: 260px; background: #1e293b; border-radius: 10px; padding: 1.5rem; display: flex; flex-direction: column; gap: .5rem; }
+  .rate-block { flex: 1; min-width: 340px; background: #1e293b; border-radius: 10px; padding: 1.5rem; display: flex; flex-direction: column; gap: .5rem; }
   .rate-block h3 { margin: 0 0 .5rem; font-size: .9rem; color: #94a3b8; font-weight: 500; text-align: center; }
   .rate-empty { color: #475569; font-size: .85rem; margin: 0; }
   .rate-line { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
@@ -579,13 +581,19 @@
   .rate-btn:hover:not(:disabled) { background: #1d4ed8; color: #fff; }
   .rate-btn:disabled { opacity: .5; cursor: default; }
 
-  @media (max-width: 480px) {
+  /* Below this, .rates-row has already wrapped each card to full width
+     (see .rate-block min-width above), so it's safe to let rate-line items
+     wrap onto their own lines without squeezing the card title. */
+  @media (max-width: 700px) {
     .rate-block, .chart-card { flex: 1 1 100%; min-width: 0; padding: 1rem; }
     .rate-line { gap: .4rem; }
     .rate-name { flex: 1 1 100%; white-space: normal; }
     .rate-badge { white-space: normal; }
     .rate-auto { display: block; margin-left: 0; }
     .rate-input { width: 3.5rem; }
+  }
+
+  @media (max-width: 480px) {
     .chart-wrap { height: 320px; }
   }
 
