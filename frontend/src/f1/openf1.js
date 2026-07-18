@@ -1,9 +1,8 @@
-// OpenF1 API client. OpenF1 dropped browser CORS support, so we go through our
-// own backend relay (/api/f1/openf1/<endpoint>) instead of hitting
-// api.openf1.org directly — the server forwards the request and the query string
-// verbatim. We only use the free historical REST endpoints (no MQTT/WebSocket).
+// OpenF1 API client — public API (api.openf1.org), no key, CORS-enabled.
+// All race data is fetched client-side, straight from OpenF1. We only use the
+// free historical REST endpoints here (no MQTT/WebSocket streaming).
 
-const BASE = '/api/f1/openf1';
+const BASE = 'https://api.openf1.org/v1';
 
 // OpenF1 free tier allows 30 requests/MINUTE (= 0.5 req/s). We serialize all
 // requests through a single queue with a minimum spacing so bursts (initial
@@ -92,10 +91,14 @@ export async function fetchDrivers(sessionKey) {
 
 // --- Live classification ---
 
-// Latest position per driver. OpenF1 returns the full history, so we keep the
-// last record per driver_number.
-export async function fetchPositions(sessionKey) {
-  const rows = await get('/position', { session_key: sessionKey });
+// Position per driver as it stood at `anchorMs` (the replay clock), not the
+// final race result. OpenF1 returns every change up to that point; we keep the
+// last record per driver_number within the window.
+export async function fetchPositions(sessionKey, anchorMs = Date.now()) {
+  const rows = await get('/position', {
+    session_key: sessionKey,
+    'date<': new Date(anchorMs).toISOString(),
+  });
   const latest = {};
   for (const r of rows) {
     if (r.position == null) continue;
@@ -104,9 +107,12 @@ export async function fetchPositions(sessionKey) {
   return latest; // { driver_number: position }
 }
 
-// Latest interval/gap per driver.
-export async function fetchIntervals(sessionKey) {
-  const rows = await get('/intervals', { session_key: sessionKey });
+// Interval/gap per driver as it stood at `anchorMs`.
+export async function fetchIntervals(sessionKey, anchorMs = Date.now()) {
+  const rows = await get('/intervals', {
+    session_key: sessionKey,
+    'date<': new Date(anchorMs).toISOString(),
+  });
   const latest = {};
   for (const r of rows) {
     latest[r.driver_number] = { gapToLeader: r.gap_to_leader, interval: r.interval };
@@ -114,9 +120,12 @@ export async function fetchIntervals(sessionKey) {
   return latest; // { driver_number: { gapToLeader, interval } }
 }
 
-// Latest completed lap per driver (lap_number + lap_duration).
-export async function fetchLatestLaps(sessionKey) {
-  const rows = await get('/laps', { session_key: sessionKey });
+// Latest completed lap per driver (lap_number + lap_duration) as of `anchorMs`.
+export async function fetchLatestLaps(sessionKey, anchorMs = Date.now()) {
+  const rows = await get('/laps', {
+    session_key: sessionKey,
+    'date_start<': new Date(anchorMs).toISOString(),
+  });
   const latest = {};
   for (const r of rows) {
     const cur = latest[r.driver_number];
@@ -189,9 +198,12 @@ function downsample(pts, max) {
 
 // --- Race control (flags / safety car) ---
 
-// Returns the most recent track-wide flag/safety-car state.
-export async function fetchRaceControl(sessionKey) {
-  const rows = await get('/race_control', { session_key: sessionKey });
+// Returns the track-wide flag/safety-car state as of `anchorMs`.
+export async function fetchRaceControl(sessionKey, anchorMs = Date.now()) {
+  const rows = await get('/race_control', {
+    session_key: sessionKey,
+    'date<': new Date(anchorMs).toISOString(),
+  });
   let flag = null;
   for (const r of rows) {
     if (r.category === 'SafetyCar') {

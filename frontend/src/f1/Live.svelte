@@ -39,6 +39,10 @@
   let carPositions = {};  // number -> { x, y } interpolated, updated each frame
   let rafId = null;
 
+  // Manual clock skip: how many minutes the "+X min" control jumps forward.
+  let skipMinutes = 5;
+  let skipping = false;
+
   // Initial-load checklist shown in the spinner. Each step flips to 'done' (or
   // 'fail') as its API call resolves, so the user sees progress instead of a
   // blank spinner — and which call is the slow one under the 30 req/min budget.
@@ -136,6 +140,26 @@
     return Date.now() - replayOffsetMs;
   }
 
+  // Jump the replay clock forward by `skipMinutes`. Increasing the offset moves
+  // `anchor()` further into the race. The location buffer holds samples around
+  // the old clock position, so it's cleared to avoid interpolating across the
+  // jump; classification/laps/flags are just re-fetched at the new anchor.
+  async function skipForward() {
+    if (skipping || !session) return;
+    const minutes = Number(skipMinutes);
+    if (!Number.isFinite(minutes) || minutes <= 0) return;
+
+    skipping = true;
+    try {
+      replayOffsetMs -= minutes * 60_000;
+      buffer = {};
+      carPositions = {};
+      await Promise.all([refreshClassification(), refreshLocations(), refreshSlow()]);
+    } finally {
+      skipping = false;
+    }
+  }
+
   // Append a freshly fetched window of samples into each driver's timeline,
   // de-duplicating by timestamp and trimming anything too old to matter.
   function ingestLocations(byDriver) {
@@ -186,8 +210,8 @@
 
   async function refreshClassification() {
     const key = session.session_key;
-    positions = await fetchPositions(key).catch(() => positions);
-    intervals = await fetchIntervals(key).catch(() => intervals);
+    positions = await fetchPositions(key, anchor()).catch(() => positions);
+    intervals = await fetchIntervals(key, anchor()).catch(() => intervals);
   }
 
   async function refreshLocations() {
@@ -197,8 +221,8 @@
 
   async function refreshSlow() {
     const key = session.session_key;
-    laps = await fetchLatestLaps(key).catch(() => laps);
-    flag = await fetchRaceControl(key).catch(() => flag);
+    laps = await fetchLatestLaps(key, anchor()).catch(() => laps);
+    flag = await fetchRaceControl(key, anchor()).catch(() => flag);
   }
 
   function fmtGap(num) {
@@ -262,7 +286,22 @@
 
 <div class="live">
   <div class="replay-banner">
-    Replay {race?.raceName ? `du ${race.raceName}` : 'de la course'} — rejoué comme en direct depuis la minute 2
+    <span>Replay {race?.raceName ? `du ${race.raceName}` : 'de la course'} — rejoué comme en direct depuis la minute 2</span>
+    {#if !loading && !error}
+      <div class="skip-control">
+        <input
+          type="number"
+          min="1"
+          step="1"
+          bind:value={skipMinutes}
+          disabled={skipping}
+          aria-label="Minutes à avancer"
+        />
+        <button on:click={skipForward} disabled={skipping}>
+          {skipping ? '…' : `+${skipMinutes || 0} min`}
+        </button>
+      </div>
+    {/if}
   </div>
 
   {#if loading}
@@ -362,9 +401,25 @@
   @keyframes blink { 0%,100% { opacity: .4; } 50% { opacity: 1; } }
 
   .replay-banner {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: .75rem; flex-wrap: wrap;
     font-size: .78rem; color: #fbbf24; background: #1f1a05;
     border: 1px solid #78500a; border-radius: 8px; padding: .5rem .8rem;
   }
+
+  .skip-control { display: flex; align-items: center; gap: .4rem; flex-shrink: 0; }
+  .skip-control input {
+    width: 3.5rem; font-size: .78rem; padding: .3rem .4rem;
+    background: #0f172a; border: 1px solid #78500a; border-radius: 6px;
+    color: #f1f5f9; font-variant-numeric: tabular-nums;
+  }
+  .skip-control button {
+    font-size: .78rem; font-weight: 600; padding: .3rem .7rem;
+    background: #78500a; border: 1px solid #78500a; border-radius: 6px;
+    color: #fef3c7; cursor: pointer; white-space: nowrap;
+  }
+  .skip-control button:hover:not(:disabled) { background: #92660d; }
+  .skip-control button:disabled { opacity: .6; cursor: default; }
 
   .status-bar {
     display: flex; align-items: center; justify-content: space-between;

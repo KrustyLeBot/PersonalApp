@@ -1,5 +1,5 @@
 <script>
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount } from 'svelte';
   import Portfolio from './Portfolio.svelte';
   import Telework from './Telework.svelte';
   import LolCalendar from './LolCalendar.svelte';
@@ -11,7 +11,6 @@
   let email = '';
   let dbStatus = 'checking';
   let activeTab = 'settings';
-  let healthInterval;
   let enabledFeatures = [];
 
   onMount(async () => {
@@ -27,13 +26,10 @@
     if (authenticated) {
       await loadFeatures();
       await checkHealth();
-      healthInterval = setInterval(checkHealth, 30000);
     }
 
     loading = false;
   });
-
-  onDestroy(() => clearInterval(healthInterval));
 
   async function loadFeatures() {
     try {

@@ -10,23 +10,20 @@ import (
 )
 
 type Handler struct {
-	repo  *Repo
-	svc   *Service
-	proxy *openF1Proxy
+	repo *Repo
+	svc  *Service
 }
 
 func NewHandler(repo *Repo, svc *Service) *Handler {
-	return &Handler{repo: repo, svc: svc, proxy: newOpenF1Proxy()}
+	return &Handler{repo: repo, svc: svc}
 }
 
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/f1/standings",                             auth.RequireAuth(h.standings))
-	mux.HandleFunc("GET /api/f1/races",                                 auth.RequireAuth(h.races))
-	mux.HandleFunc("GET /api/f1/races/{season}/{round}/results",        auth.RequireAuth(h.raceResults))
-	mux.HandleFunc("GET /api/f1/races/{season}/{round}/qualifying",     auth.RequireAuth(h.qualifying))
-	mux.HandleFunc("POST /api/f1/refresh",                              auth.RequireAuth(h.forceRefresh))
-	// Replay live data: relay to the OpenF1 API (browser CORS is unavailable).
-	mux.HandleFunc("GET /api/f1/openf1/{endpoint}",                     auth.RequireAuth(h.proxy.handle))
+	mux.HandleFunc("GET /api/f1/standings",                         auth.RequireAuth(h.standings))
+	mux.HandleFunc("GET /api/f1/races",                             auth.RequireAuth(h.races))
+	mux.HandleFunc("GET /api/f1/races/{season}/{round}/results",    auth.RequireAuth(h.raceResults))
+	mux.HandleFunc("GET /api/f1/races/{season}/{round}/qualifying", auth.RequireAuth(h.qualifying))
+	mux.HandleFunc("POST /api/f1/refresh",                          auth.RequireAuth(h.forceRefresh))
 }
 
 func (h *Handler) standings(w http.ResponseWriter, r *http.Request, _ string) {
