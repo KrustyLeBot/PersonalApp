@@ -15,6 +15,7 @@ import (
 	"helloauth/internal/portfolio/projection"
 	"helloauth/internal/settings"
 	"helloauth/internal/telework"
+	"helloauth/internal/walk"
 )
 
 func main() {
@@ -80,6 +81,11 @@ func main() {
 	f1Svc := f1.NewService(f1Repo, f1.NewClient())
 	f1Handler := f1.NewHandler(f1Repo, f1Svc)
 	f1Handler.RegisterRoutes(mux)
+
+	walkRepo := walk.NewRepo(database)
+	walkSvc := walk.NewService(walkRepo)
+	walkHandler := walk.NewHandler(walkRepo, walkSvc)
+	walkHandler.RegisterRoutes(mux)
 
 	settingsRepo := settings.NewRepo(database)
 	settingsHandler := settings.NewHandler(settingsRepo)

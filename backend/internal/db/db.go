@@ -410,6 +410,15 @@ func (d *Database) Migrate() error {
 			user_email        VARCHAR(255) PRIMARY KEY,
 			enabled_features  TEXT         NOT NULL DEFAULT '[]'
 		);
+
+		CREATE TABLE IF NOT EXISTS walk_entries (
+			entry_date DATE          NOT NULL,
+			user_email VARCHAR(255)  NOT NULL,
+			year       INTEGER       NOT NULL,
+			km         DECIMAL(6,2)  NOT NULL CHECK (km > 0),
+			updated_at TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+			PRIMARY KEY (entry_date, user_email)
+		);
 	`)
 	return err
 }

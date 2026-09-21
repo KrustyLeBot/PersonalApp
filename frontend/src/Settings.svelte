@@ -7,6 +7,7 @@
 
   const ALL_FEATURES = [
     { id: 'portfolio',    label: 'Portfolio' },
+    { id: 'walk',         label: 'Marche' },
     { id: 'telework',     label: 'Télétravail' },
     { id: 'lol-calendar', label: 'Calendrier LoL' },
     { id: 'f1',           label: 'Formule 1' },

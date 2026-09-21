@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import Portfolio from './Portfolio.svelte';
+  import Walk from './Walk.svelte';
   import Telework from './Telework.svelte';
   import LolCalendar from './LolCalendar.svelte';
   import F1 from './F1.svelte';
@@ -37,9 +38,8 @@
       if (res.ok) {
         const data = await res.json();
         enabledFeatures = data.enabled ?? [];
-        if (enabledFeatures.length > 0) {
-          activeTab = enabledFeatures[0];
-        }
+        const first = FEATURE_ORDER.find(f => enabledFeatures.includes(f));
+        if (first) activeTab = first;
       }
     } catch {
       enabledFeatures = [];
@@ -65,10 +65,16 @@
 
   const FEATURE_LABELS = {
     portfolio:      'Portfolio',
+    walk:           'Marche',
     telework:       'Télétravail',
     'lol-calendar': 'Calendrier LoL',
     f1:             'F1',
   };
+
+  // Tabs always appear in this order, whatever order they were enabled in.
+  const FEATURE_ORDER = ['portfolio', 'walk', 'telework', 'lol-calendar', 'f1'];
+
+  $: orderedFeatures = FEATURE_ORDER.filter(f => enabledFeatures.includes(f));
 </script>
 
 {#if loading}
@@ -102,7 +108,7 @@
 
     <!-- Tab bar -->
     <nav class="tabbar">
-      {#each enabledFeatures as id}
+      {#each orderedFeatures as id}
         <button
           class="tab {activeTab === id ? 'active' : ''}"
           on:click={() => activeTab = id}
@@ -122,6 +128,8 @@
     <main class="content">
       {#if activeTab === 'portfolio'}
         <Portfolio />
+      {:else if activeTab === 'walk'}
+        <Walk />
       {:else if activeTab === 'telework'}
         <Telework />
       {:else if activeTab === 'lol-calendar'}
