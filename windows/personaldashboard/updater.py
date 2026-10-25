@@ -8,7 +8,6 @@ import hashlib
 import os
 import subprocess
 import sys
-import tempfile
 import threading
 import urllib.request
 
@@ -40,11 +39,15 @@ class Download:
             return {"done": self._done, "total": self._total}
 
 
-def download(url: str, size: int, sha256: str, state: Download) -> str:
-    """Download to a temp file and verify it; returns its path. A truncated or tampered file never survives."""
+def download(url: str, size: int, sha256: str, state: Download, dest_dir: str) -> str:
+    """Download next to the running exe and verify it; returns its path.
+
+    It must be on the same drive as the exe: swapping files across drives fails on Windows (WinError 17).
+    A truncated or tampered file never survives.
+    """
     if not url.startswith("https://"):
         raise ValueError("Seules les URL https sont autorisées")
-    target = os.path.join(tempfile.gettempdir(), f"{APP_NAME}-update.exe.download")
+    target = os.path.join(dest_dir, f"{APP_NAME}-update.exe.download")
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     digest, done = hashlib.sha256(), 0
     state.set(0, size)

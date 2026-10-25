@@ -9,7 +9,7 @@ from personaldashboard.bridge import BridgeServer
 from personaldashboard.config import Config, documents_dir
 from personaldashboard.instance import SingleInstance
 from personaldashboard.services import Services
-from personaldashboard import storage
+from personaldashboard import storage, updater
 
 
 def make_server(tmp: Path):
@@ -129,6 +129,25 @@ class ConfigTests(unittest.TestCase):
             self.assertFalse(storage.has_data(Path(t)))
             (Path(t) / "walk.json").write_text("{}")
             self.assertTrue(storage.has_data(Path(t)))
+
+
+class UpdaterTests(unittest.TestCase):
+    def test_install_swaps_the_exe_and_keeps_the_old_one(self):
+        with tempfile.TemporaryDirectory() as t:
+            exe, new = Path(t) / "PersonalDashboard.exe", Path(t) / "update.download"
+            exe.write_bytes(b"old")
+            new.write_bytes(b"new")
+            updater.install(str(exe), str(new))
+            self.assertEqual(exe.read_bytes(), b"new")
+            self.assertEqual(Path(str(exe) + ".old").read_bytes(), b"old")
+
+    def test_failed_install_puts_the_working_exe_back(self):
+        with tempfile.TemporaryDirectory() as t:
+            exe = Path(t) / "PersonalDashboard.exe"
+            exe.write_bytes(b"old")
+            with self.assertRaises(OSError):
+                updater.install(str(exe), str(Path(t) / "missing.download"))
+            self.assertEqual(exe.read_bytes(), b"old")
 
 
 class PlatformTests(unittest.TestCase):

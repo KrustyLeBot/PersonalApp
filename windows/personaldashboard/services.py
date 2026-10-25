@@ -1,5 +1,6 @@
 """What the UI can ask the native side to do. Each public method is one /__bridge/<name> call."""
 
+import os
 from typing import Callable
 
 from . import BUILD, VERSION, net, storage, updater
@@ -46,7 +47,10 @@ class Services:
         if not updater.running_exe():
             raise BridgeError("La mise à jour automatique ne fonctionne que depuis l'exécutable.")
         try:
-            updater.download(body.get("url", ""), int(body.get("size") or 0), body.get("sha256") or "", self._download)
+            updater.download(
+                body.get("url", ""), int(body.get("size") or 0), body.get("sha256") or "", self._download,
+                os.path.dirname(updater.running_exe()),
+            )
         except (ValueError, OSError) as exc:
             raise BridgeError(str(exc)) from exc
         return {}
