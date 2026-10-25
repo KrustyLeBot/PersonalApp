@@ -117,8 +117,12 @@ final class SynchrotronClient {
             h.main.post(() -> ender.end("skipped", 0, false, "cooldown"));
             return h;
         }
-        ConnectivityManager cm = app.getSystemService(ConnectivityManager.class);
-        if (cm.getActiveNetwork() == null) { h.main.post(() -> ender.end("skipped", 0, false, "network")); return h; }
+        // Needs ACCESS_NETWORK_STATE; without it assume we are online rather than crash.
+        boolean offline = false;
+        try {
+            offline = app.getSystemService(ConnectivityManager.class).getActiveNetwork() == null;
+        } catch (RuntimeException ignored) { /* permission missing */ }
+        if (offline) { h.main.post(() -> ender.end("skipped", 0, false, "network")); return h; }
 
         h.receiver = new BroadcastReceiver() {
             @Override
