@@ -1,2 +1,2 @@
-PySide6-Essentials>=6.7
-PySide6-Addons>=6.7
+# The full package: since 6.12 QtWebEngine lives in its own wheel (PySide6-WebEngine), pulled in by this one.
+PySide6>=6.8,<7
