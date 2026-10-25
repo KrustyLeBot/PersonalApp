@@ -142,7 +142,7 @@ public class AppBridgePlugin extends Plugin {
         File tmp = new File(dir, file.getName() + ".tmp");
         try {
             if (!dir.isDirectory() && !dir.mkdirs()) throw new IOException("dossier non créable : " + dir);
-            try (OutputStream out = new FileOutputStream(tmp)) {
+            try (FileOutputStream out = new FileOutputStream(tmp)) {
                 out.write(content.getBytes(StandardCharsets.UTF_8));
                 out.getFD().sync();
             }
