@@ -116,6 +116,12 @@ Daily price refresh follows the **frontend-driven daily-refresh** pattern below.
 
 ---
 
+## Data export (`internal/export`)
+
+`GET /api/export` (authenticated) returns a zip of JSON files for the future file-based mobile app: `manifest.json` (`format_version`, `exported_at`, `files`), `portfolio.json`, `telework.json`, `walk.json`. The Go types in `internal/export/models.go` are the reference for the file format; bump `FormatVersion` on incompatible changes. Ticker prices and other external caches are not exported. When a portfolio/telework/walk table or column changes, update `export/models.go` and `export/repo.go` too.
+
+---
+
 ## Fundamental rule: frontend-driven daily refresh
 
 **Pages that refresh external data once per calendar day must NOT block their GET endpoint on that refresh.** A blocking refresh leaves the page empty for seconds while the external fetch runs. Instead:

@@ -73,6 +73,10 @@
       <span class="saved-msg">Sauvegardé</span>
     {/if}
   </div>
+
+  <h2 class="export-title">Export</h2>
+  <p class="hint">Télécharge portfolio, marche et télétravail dans un zip de fichiers JSON.</p>
+  <a class="btn-export" href="/api/export" download>Exporter mes données</a>
 </div>
 
 <style>
@@ -146,6 +150,18 @@
   }
 
   .btn-save:hover:not(:disabled) { background: #1d4ed8; }
+  .export-title { margin-top: 2rem; }
+  .btn-export {
+    display: inline-block;
+    padding: .5rem 1.25rem;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    background: #1e293b;
+    color: #f1f5f9;
+    text-decoration: none;
+    font-size: .95rem;
+  }
+  .btn-export:hover { border-color: #60a5fa; }
   .btn-save:disabled { opacity: .5; cursor: default; }
 
   .saved-msg {

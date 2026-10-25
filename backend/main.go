@@ -9,6 +9,7 @@ import (
 
 	"helloauth/internal/auth"
 	"helloauth/internal/db"
+	"helloauth/internal/export"
 	"helloauth/internal/f1"
 	lolcalendar "helloauth/internal/lol-calendar"
 	"helloauth/internal/portfolio"
@@ -86,6 +87,11 @@ func main() {
 	walkSvc := walk.NewService(walkRepo)
 	walkHandler := walk.NewHandler(walkRepo, walkSvc)
 	walkHandler.RegisterRoutes(mux)
+
+	exportRepo := export.NewRepo(database)
+	exportSvc := export.NewService(exportRepo)
+	exportHandler := export.NewHandler(exportSvc)
+	exportHandler.RegisterRoutes(mux)
 
 	settingsRepo := settings.NewRepo(database)
 	settingsHandler := settings.NewHandler(settingsRepo)
