@@ -1,90 +1,54 @@
-# Personal Dashboard
+# PersonalDashboard
 
-A personal web app built to centralize tools I use daily. Access is restricted to authorized Google accounts.
+Personal dashboard for Android and Windows. All data lives in plain JSON files — no server, no database, no account.
 
-**Stack:** Go · Svelte · PostgreSQL · Docker · Render
+| Tab | What it does |
+|---|---|
+| **Portfolio** | Net worth by asset class (real estate, euro funds, savings, crypto, stock accounts, structured products, loans). Live prices from Yahoo Finance, pie charts, wealth projection over 1–20 years |
+| **Marche** | Daily walking distance, year grid, week/month/year totals |
+| **Télétravail** | Remote-work calendar for Geneva (public holidays included), remote percentage against the 40 % threshold |
 
----
+## Apps
 
-## Features
+- **Android** (`android/`, Capacitor): the data folder is fixed, `Documents/PersonalDashboard`. On first launch the app asks for « All files access » so it can read and write it.
+- **Windows** (`windows/`, PySide6 + PyInstaller): a single `PersonalDashboard.exe`. The data folder defaults to `Documents\PersonalDashboard` and can be changed in *Paramètres → Changer de dossier…* (e.g. a synced folder).
 
-### 💰 Portfolio Tracker
-Track your net worth across all asset classes in one place.
+Both run the same interface (`ui/`, Svelte) and the same logic (`ui/src/local/`), and both update themselves from the GitHub release (see [docs/RELEASE.md](docs/RELEASE.md)).
 
-- **Asset types:** Real estate, Euro funds, Savings accounts, Crypto, Stock accounts
-- **Stock accounts** (PEA, CTO, AV Bourse…) hold individual positions — each with a ticker and a number of shares
-- **Live prices** fetched daily from Yahoo Finance on first visit, or on demand via a manual refresh button
-- **Dashboard** shows total net worth, a breakdown pie chart by asset type, and a second pie chart showing stock allocation by ticker across all accounts
-- Tickers use Yahoo Finance symbols — append `.PA` for Euronext Paris (e.g. `CW8.PA`), no suffix for US markets (`AAPL`)
+## Data files
 
----
+Put these files in the data folder (they are the content of the zip exported by the former web version):
+
+| File | Content |
+|---|---|
+| `portfolio.json` | `assets[]` (each with `holdings[]` and, for loans, `dette`), `ticker_categories`, `projection_rates[]` |
+| `telework.json` | `remote_days` (0 = Sunday … 6 = Saturday), `overrides` (`YYYY-MM-DD` → `{am, pm}` with `leave`, `remote` or `office`) |
+| `walk.json` | `entries` (`YYYY-MM-DD` → km) |
+| `cache.json` | Last Yahoo prices and refresh time. Written by the app; safe to delete |
+| `manifest.json` | Optional: `format_version`. The app refuses a newer format than it knows (currently 1) |
+
+Missing files are treated as empty. A file that cannot be parsed is reported and never overwritten. Writes are atomic (temporary file, then rename). Asset IDs are stable because per-asset projection rate keys (`livret_12`) refer to them.
+
+To migrate from the old web app: unzip the export into the data folder.
 
 ## Project structure
 
 ```
-.
-├── backend/
-│   ├── main.go                      # Entry point — init + route registration
-│   └── internal/
-│       ├── db/         db.go        # Database connection & migrations
-│       ├── auth/                    # Google OAuth, session cookies, auth middleware
-│       └── portfolio/               # Portfolio feature — models, repo, service, handlers
-└── frontend/
-    └── src/
-        ├── App.svelte               # Shell — status bar, tab routing
-        ├── Portfolio.svelte         # Portfolio dashboard
-        ├── AssetModal.svelte        # Create / edit asset
-        └── HoldingsModal.svelte     # Manage stock positions within an account
+ui/                    Svelte UI + local logic, shared by both apps
+  src/local/           what the Go backend used to do: portfolio, projection, telework, walk, store, router
+  src/platform/        android.js (Capacitor plugin) and windows.js (local bridge)
+android/               Capacitor project; AppBridgePlugin.java = files, HTTP, self-update
+windows/               PySide6 shell: web view + local bridge server + updater
+branding/              logo (SVG source of every icon)
+docs/RELEASE.md        build, signing, release, auto-update
+.github/workflows/     build.yml
 ```
 
----
+The components call `fetch('/api/…')` as before; `ui/src/local/router.js` answers those calls from the data files instead of a server.
 
-## Local development
-
-**Prerequisites:** Go 1.22+, Node 18+, PostgreSQL
+## Tests
 
 ```bash
-# 1. Copy and fill environment variables
-cp .env.example .env
-
-# 2. Backend
-cd backend && go run .
-
-# 3. Frontend (separate terminal)
-cd frontend && npm install && npm run dev
+cd ui && npm test                                  # logic: loans, holidays, summaries, projections, router
+cd windows && python -m unittest discover -s tests -t .   # bridge server, storage, config
 ```
-
-The Vite dev server runs on port 5173 and proxies API calls to the Go backend on port 8080.
-
----
-
-## Environment variables
-
-| Variable | Required | Description |
-|---|---|---|
-| `DATABASE_URL` | No | PostgreSQL DSN — app runs without it (no persistence) |
-| `GOOGLE_CLIENT_ID` | Yes | OAuth client ID from Google Cloud Console |
-| `GOOGLE_CLIENT_SECRET` | Yes | OAuth client secret |
-| `GOOGLE_REDIRECT_URL` | Yes | Exact callback URL registered in Google Console |
-| `SESSION_SECRET` | Yes | HMAC signing key — generate with `openssl rand -base64 32` |
-| `ALLOWED_EMAILS` | Yes | Comma-separated whitelist of authorized emails |
-| `PORT` | No | HTTP listen port (default `8080`, auto-set by Render) |
-
----
-
-## Google OAuth setup (one-time)
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com) and create a project.
-2. **APIs & Services → OAuth consent screen** — set user type to External, add your email as a test user.
-3. **Credentials → Create → OAuth client ID** — type: Web application.
-4. Add your redirect URI: `http://localhost:8080/auth/callback` for local dev, `https://your-app.onrender.com/auth/callback` for production.
-5. Copy the Client ID and Secret into `.env`.
-
----
-
-## Deploy on Render
-
-1. Push to GitHub.
-2. Render → New Web Service → connect repo → it detects the `Dockerfile` automatically.
-3. Add environment variables in the Render dashboard.
-4. Add the Render callback URL to your Google OAuth client's authorized redirect URIs.

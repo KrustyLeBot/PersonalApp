@@ -1,0 +1,15 @@
+{
+  "appId": "com.krustylebot.personaldashboard",
+  "appName": "PersonalDashboard",
+  "webDir": "dist",
+  "android": {
+    "path": "../android",
+    "backgroundColor": "#0f172a"
+  },
+  "backgroundColor": "#0f172a",
+  "plugins": {
+    "SystemBars": {
+      "style": "DARK"
+    }
+  }
+}

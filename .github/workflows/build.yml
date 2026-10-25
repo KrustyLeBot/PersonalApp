@@ -1,0 +1,162 @@
+name: Build and release
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Only a push to main builds a release; everything else is a test build.
+  IS_RELEASE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: UI logic tests
+        working-directory: ui
+        run: |
+          npm ci
+          npm test
+      - name: Windows bridge tests
+        working-directory: windows
+        run: python -m unittest discover -s tests -t . -v
+
+  android:
+    needs: test
+    runs-on: ubuntu-latest
+    # The release environment (and its signing secrets) is only used for a push to main.
+    environment: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') && 'release' || '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build the UI and sync it into the Android project
+        working-directory: ui
+        run: |
+          npm ci
+          npm run build
+          npx cap sync android
+
+      - name: Decode the signing key
+        if: env.IS_RELEASE == 'true'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.PERSONALDASHBOARD_KEYSTORE_BASE64 }}
+        run: |
+          # Never publish an unsigned release: a missing secret fails the build.
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::PERSONALDASHBOARD_KEYSTORE_BASE64 is missing (environment 'release')"
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/personaldashboard.jks"
+          echo "PERSONALDASHBOARD_KEYSTORE=$RUNNER_TEMP/personaldashboard.jks" >> "$GITHUB_ENV"
+
+      - name: Build the APK
+        working-directory: android
+        env:
+          PERSONALDASHBOARD_BUILD: ${{ github.run_number }}
+          PERSONALDASHBOARD_KEYSTORE_PASSWORD: ${{ secrets.PERSONALDASHBOARD_KEYSTORE_PASSWORD }}
+          PERSONALDASHBOARD_KEY_ALIAS: personaldashboard
+          PERSONALDASHBOARD_KEY_PASSWORD: ${{ secrets.PERSONALDASHBOARD_KEY_PASSWORD }}
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          chmod +x gradlew
+          ./gradlew --no-daemon :app:assembleRelease
+
+      - name: Name the artifact
+        run: cp android/app/build/outputs/apk/release/app-release.apk PersonalDashboard.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: PersonalDashboard.apk
+          if-no-files-found: error
+
+  windows:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: windows/requirements.txt
+
+      - name: Build the UI
+        working-directory: ui
+        run: |
+          npm ci
+          npm run build
+
+      - name: Package the exe
+        working-directory: windows
+        shell: pwsh
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: ./build.ps1 -Ci
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            windows/dist/PersonalDashboard.exe
+            windows/dist/PersonalDashboard.exe.sha256
+          if-no-files-found: error
+
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [android, windows]
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Publish the rolling release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # One rolling "latest" release: the apps read its title ("build N") and asset names.
+          gh release delete latest --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
+          gh release create latest --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "PersonalDashboard build ${{ github.run_number }}" \
+            --notes "Automatic build of ${GITHUB_SHA::7}." \
+            --latest \
+            artifacts/PersonalDashboard.apk \
+            artifacts/PersonalDashboard.exe \
+            artifacts/PersonalDashboard.exe.sha256

@@ -1,0 +1,23 @@
+{
+  "name": "personalapp-ui",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node --test src/local/local.test.js"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.3",
+    "@sveltejs/vite-plugin-svelte": "^3.1.1",
+    "svelte": "^4.2.18",
+    "vite": "^5.3.1"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/core": "^8.5.3",
+    "chart.js": "^4.5.1"
+  }
+}
