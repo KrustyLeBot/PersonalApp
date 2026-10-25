@@ -1,2 +1,3 @@
-# The full package: since 6.12 QtWebEngine lives in its own wheel (PySide6-WebEngine), pulled in by this one.
-PySide6>=6.8,<7
+# pywebview shows the UI in the Edge WebView2 already installed with Windows (no Chromium bundled: small exe).
+# pythonnet is pulled in by pywebview on Windows.
+pywebview>=6.2,<7

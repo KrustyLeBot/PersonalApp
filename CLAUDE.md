@@ -1,6 +1,6 @@
 # PersonalDashboard — Developer Reference
 
-Personal dashboard (Portfolio, Marche, Télétravail) as two apps sharing one interface: an Android app (Capacitor) and a Windows app (PySide6). Data is stored in JSON files; there is no server, database or account. The former Go + PostgreSQL web app was removed (it remains in the git history).
+Personal dashboard (Portfolio, Marche, Télétravail) as two apps sharing one interface: an Android app (Capacitor) and a Windows app (Python + pywebview, using the system's Edge WebView2). Data is stored in JSON files; there is no server, database or account. The former Go + PostgreSQL web app was removed (it remains in the git history).
 
 ---
 
@@ -18,7 +18,7 @@ ui/                      Svelte 4 + Vite + Chart.js — the interface AND the bu
     update.js            checks the GitHub release « latest »
   src/platform/          android.js (Capacitor plugin AppBridge) / windows.js (HTTP bridge)
 android/                 Capacitor project; AppBridgePlugin.java = data files, HTTP, self-update
-windows/                 PySide6 shell hosting the built UI in a web view
+windows/                 pywebview shell hosting the built UI (WebView2; no bundled browser engine)
   personaldashboard/bridge.py    local server: static UI + /__bridge/<name> (token-protected)
   personaldashboard/services.py  what the UI may ask the native side
   personaldashboard/updater.py   exe self-update (GitEnough approach)

@@ -2,6 +2,7 @@
 
 import json
 import os
+import sys
 from pathlib import Path
 
 from . import APP_NAME
@@ -10,6 +11,35 @@ from . import APP_NAME
 def settings_dir() -> Path:
     base = os.environ.get("APPDATA")
     return Path(base) / APP_NAME if base else Path.home() / ".config" / APP_NAME
+
+
+def documents_dir() -> Path:
+    """The user's Documents folder (follows a OneDrive redirection on Windows)."""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            class Guid(ctypes.Structure):
+                _fields_ = [
+                    ("Data1", wintypes.DWORD),
+                    ("Data2", wintypes.WORD),
+                    ("Data3", wintypes.WORD),
+                    ("Data4", ctypes.c_ubyte * 8),
+                ]
+
+            folderid_documents = Guid(
+                0xFDD39AD0, 0x238F, 0x46AF, (ctypes.c_ubyte * 8)(0xAD, 0xB4, 0x6C, 0x85, 0x48, 0x03, 0x69, 0xC7)
+            )
+            path = ctypes.c_wchar_p()
+            if ctypes.windll.shell32.SHGetKnownFolderPath(ctypes.byref(folderid_documents), 0, None, ctypes.byref(path)) == 0:
+                result = path.value
+                ctypes.windll.ole32.CoTaskMemFree(path)
+                if result:
+                    return Path(result)
+        except (OSError, AttributeError):
+            pass
+    return Path.home() / "Documents"
 
 
 class Config:

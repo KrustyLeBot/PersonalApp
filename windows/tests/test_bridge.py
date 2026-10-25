@@ -6,7 +6,8 @@ import urllib.request
 from pathlib import Path
 
 from personaldashboard.bridge import BridgeServer
-from personaldashboard.config import Config
+from personaldashboard.config import Config, documents_dir
+from personaldashboard.instance import SingleInstance
 from personaldashboard.services import Services
 from personaldashboard import storage
 
@@ -128,6 +129,14 @@ class ConfigTests(unittest.TestCase):
             self.assertFalse(storage.has_data(Path(t)))
             (Path(t) / "walk.json").write_text("{}")
             self.assertTrue(storage.has_data(Path(t)))
+
+
+class PlatformTests(unittest.TestCase):
+    def test_documents_dir_is_a_path(self):
+        self.assertEqual(documents_dir().name, "Documents")
+
+    def test_single_instance_is_a_noop_outside_windows(self):
+        self.assertTrue(SingleInstance("PersonalDashboardTest").acquire(wait=0.1))
 
 
 if __name__ == "__main__":

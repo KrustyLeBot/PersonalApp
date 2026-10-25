@@ -28,6 +28,7 @@ Set-Content -Path personaldashboard\_build.py -Value "BUILD = $build" -Encoding 
     --icon personaldashboard\assets\icon.ico `
     --add-data "personaldashboard\web;personaldashboard\web" `
     --add-data "personaldashboard\assets;personaldashboard\assets" `
+    --collect-submodules webview `
     --exclude-module tkinter `
     main.py
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed (is PersonalDashboard.exe still running?)" }

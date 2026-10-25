@@ -11,7 +11,7 @@ Personal dashboard for Android and Windows. All data lives in plain JSON files �
 ## Apps
 
 - **Android** (`android/`, Capacitor): the data folder is fixed, `Documents/PersonalDashboard`. On first launch the app asks for « All files access » so it can read and write it.
-- **Windows** (`windows/`, PySide6 + PyInstaller): a single `PersonalDashboard.exe`. The data folder defaults to `Documents\PersonalDashboard` and can be changed in *Paramètres → Changer de dossier…* (e.g. a synced folder).
+- **Windows** (`windows/`, Python + pywebview + PyInstaller): a single, small `PersonalDashboard.exe` that shows the UI in the Microsoft Edge WebView2 already installed with Windows 10/11 (no browser engine is bundled). The data folder defaults to `Documents\PersonalDashboard` and can be changed in *Paramètres → Changer de dossier…* (e.g. a synced folder).
 
 Both run the same interface (`ui/`, Svelte) and the same logic (`ui/src/local/`), and both update themselves from the GitHub release (see [docs/RELEASE.md](docs/RELEASE.md)).
 
@@ -38,7 +38,7 @@ ui/                    Svelte UI + local logic, shared by both apps
   src/local/           what the Go backend used to do: portfolio, projection, telework, walk, store, router
   src/platform/        android.js (Capacitor plugin) and windows.js (local bridge)
 android/               Capacitor project; AppBridgePlugin.java = files, HTTP, self-update
-windows/               PySide6 shell: web view + local bridge server + updater
+windows/               pywebview shell: window + local bridge server + updater
 branding/              logo (SVG source of every icon)
 docs/RELEASE.md        build, signing, release, auto-update
 .github/workflows/     build.yml
