@@ -431,9 +431,9 @@
                           {@const change = summary.ticker_day_changes?.[h.ticker]}
                           <tr>
                             <td><code>{h.ticker}</code></td>
-                            <td>{fmtShares(h.shares, confidential)}</td>
-                            <td>{price > 0 ? fmt(price, confidential) : '—'}</td>
-                            <td class="change-cell {change > 0 ? 'up' : change < 0 ? 'down' : ''}">{fmtChange(change)}</td>
+                            <td data-label="Parts">{fmtShares(h.shares, confidential)}</td>
+                            <td data-label="Prix">{price > 0 ? fmt(price, confidential) : '—'}</td>
+                            <td data-label="Var. jour" class="change-cell {change > 0 ? 'up' : change < 0 ? 'down' : ''}">{fmtChange(change)}</td>
                             <td class="value-cell">{fmt(val, confidential)}</td>
                           </tr>
                         {/each}
@@ -646,4 +646,37 @@
   code { font-family: monospace; background: #1e293b; padding: .1rem .4rem; border-radius: 3px; font-size: .85rem; }
   .empty-state { text-align: center; padding: 3rem; color: #64748b; }
   .empty-state p { margin-bottom: 1rem; }
+
+  /* Narrow phones: every table row becomes a compact card, so nothing (notably the
+     daily variation %) is pushed past the screen edge. */
+  @media (max-width: 600px) {
+    .top-bar { margin-bottom: 1.25rem; }
+    .total-value { font-size: 2rem; }
+    .group-header { padding: .7rem 1rem; }
+
+    .asset-table th, .asset-table td { padding: .6rem 1rem; }
+    .asset-table .value-cell { white-space: nowrap; text-align: right; }
+    .asset-table th:nth-child(2) { text-align: right; }
+
+    .bourse-account-header { flex-direction: column; align-items: stretch; gap: .6rem; padding: .75rem 1rem; }
+    .bourse-account-info { justify-content: space-between; gap: .75rem; }
+    .bourse-account-header .actions-cell { justify-content: space-between; }
+    .bourse-account-header .btn-holdings { flex: 1; }
+
+    .holdings-table thead { display: none; }
+    .holdings-table, .holdings-table tbody { display: block; }
+    .holdings-table tr {
+      display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: .2rem .6rem; padding: .6rem 1rem; border-top: 1px solid #1e293b;
+    }
+    .holdings-table td { padding: 0; border: none; min-width: 0; }
+    .holdings-table td:first-child { grid-column: 1 / 3; }
+    .holdings-table td.value-cell { grid-column: 3; grid-row: 1; text-align: right; }
+    .holdings-table td[data-label]::before {
+      content: attr(data-label); display: block; font-size: .66rem; color: #475569;
+      text-transform: uppercase; letter-spacing: .04em;
+    }
+    .holdings-table td.change-cell { text-align: right; }
+    .no-holdings { padding: .6rem 1rem; }
+  }
 </style>

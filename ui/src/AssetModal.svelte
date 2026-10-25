@@ -163,8 +163,8 @@
 </div>
 
 <style>
-  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 100; }
-  .modal { background: #1e293b; border-radius: 12px; padding: 2rem; width: 100%; max-width: 420px; box-shadow: 0 20px 60px rgba(0,0,0,.5); max-height: 90vh; overflow-y: auto; }
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 1rem; }
+  .modal { background: #1e293b; border-radius: 12px; padding: 2rem; width: 100%; max-width: 420px; box-shadow: 0 20px 60px rgba(0,0,0,.5); max-height: 92vh; overflow-y: auto; }
   h2 { margin: 0 0 1.5rem; font-size: 1.1rem; color: #f1f5f9; }
 
   label { display: flex; flex-direction: column; gap: .35rem; font-size: .82rem; color: #94a3b8; margin-bottom: 1rem; }
@@ -185,4 +185,12 @@
   .btn-cancel:hover { border-color: #64748b; color: #f1f5f9; }
   .btn-save { background: #3b82f6; color: #fff; border: none; padding: .55rem 1.2rem; border-radius: 6px; font-size: .9rem; cursor: pointer; }
   .btn-save:hover { background: #2563eb; }
+
+  @media (max-width: 480px) {
+    .overlay { padding: .5rem; }
+    .modal { padding: 1.25rem; }
+    .modal-actions { flex-wrap: wrap; gap: .5rem; }
+    .modal-actions .btn-save, .modal-actions .btn-cancel { flex: 1; }
+    .btn-delete { margin-right: 0; flex: 1 1 100%; }
+  }
 </style>

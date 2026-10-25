@@ -528,6 +528,7 @@
     align-items: center;
     justify-content: center;
     z-index: 100;
+    padding: 1rem;
   }
 
   .modal {
@@ -535,7 +536,7 @@
     border: 1px solid #334155;
     border-radius: 12px;
     padding: 1.5rem;
-    min-width: 280px;
+    min-width: 0;
     max-width: 380px;
     width: 90%;
     display: flex;

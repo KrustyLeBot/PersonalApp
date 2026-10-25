@@ -115,7 +115,7 @@
               {@const price = tickerPrices[h.ticker] ?? 0}
               <tr>
                 <td><code>{h.ticker}</code></td>
-                <td>
+                <td class="cat-cell">
                   <input
                     class="cat-input"
                     type="text"
@@ -126,9 +126,9 @@
                     on:keydown={(e) => onCategoryKeydown(e, h.ticker)}
                   />
                 </td>
-                <td>{h.shares}</td>
-                <td>{price > 0 ? fmt(price) : '—'}</td>
-                <td class="value-cell">{fmt(price * h.shares)}</td>
+                <td data-label="Parts">{h.shares}</td>
+                <td data-label="Prix">{price > 0 ? fmt(price) : '—'}</td>
+                <td class="value-cell" data-label="Valeur">{fmt(price * h.shares)}</td>
                 <td class="actions-cell">
                   <button class="btn-icon" on:click={() => openEdit(h)} title="Modifier">✏️</button>
                   <button class="btn-icon danger" on:click={() => deleteHolding(h.id)} title="Supprimer">🗑</button>
@@ -177,8 +177,8 @@
 </datalist>
 
 <style>
-  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.65); display: flex; align-items: center; justify-content: center; z-index: 100; }
-  .modal { background: #1e293b; border-radius: 12px; padding: 1.75rem; width: 100%; max-width: 680px; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.65); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 1rem; }
+  .modal { background: #1e293b; border-radius: 12px; padding: 1.75rem; width: 100%; max-width: 680px; max-height: 92vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
 
   .modal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.25rem; }
   h2 { margin: 0 0 .2rem; font-size: 1.1rem; color: #f1f5f9; }
@@ -233,4 +233,30 @@
   .btn-add:hover { background: #1d3a5a; }
 
   code { font-family: monospace; background: #0f172a; padding: .1rem .4rem; border-radius: 3px; }
+
+  @media (max-width: 600px) {
+    .overlay { padding: .5rem; }
+    .modal { padding: 1.1rem; }
+
+    .holdings-table thead { display: none; }
+    .holdings-table, .holdings-table tbody { display: block; }
+    .holdings-table tr {
+      display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: .3rem .6rem; padding: .65rem 0; border-bottom: 1px solid #0f172a;
+    }
+    .holdings-table td { padding: 0; border: none; min-width: 0; }
+    .holdings-table tr:hover td { background: transparent; }
+    .holdings-table td:first-child { grid-column: 1 / 3; }
+    .holdings-table td.actions-cell { grid-column: 3; grid-row: 1; }
+    .holdings-table td.cat-cell { grid-column: 1 / -1; }
+    .cat-input { width: 100%; border-color: #334155; }
+    .holdings-table td[data-label]::before {
+      content: attr(data-label); display: block; font-size: .66rem; color: #475569;
+      text-transform: uppercase; letter-spacing: .04em;
+    }
+    .holdings-table td.value-cell { text-align: right; }
+
+    .form-row .input-ticker, .form-row .input-shares { width: 100%; flex: 1 1 100%; }
+    .form-row .btn-save, .form-row .btn-cancel { flex: 1; }
+  }
 </style>

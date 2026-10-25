@@ -199,11 +199,11 @@
                 <span class="asset-name">{asset.name}</span>
                 <span class="asset-type">{TYPE_LABELS[asset.type] || asset.type}</span>
               </td>
-              <td class="num">{fmtMoney(asset.current)}</td>
-              <td class="num">{fmtMoney(asset.values?.['5']  ?? asset.current)}</td>
-              <td class="num">{fmtMoney(asset.values?.['10'] ?? asset.current)}</td>
-              <td class="num projected">{fmtMoney(asset.values?.['20'] ?? asset.current)}</td>
-              <td class="rate-cell">
+              <td class="num today" data-label="Aujourd'hui">{fmtMoney(asset.current)}</td>
+              <td class="num" data-label="+5 ans">{fmtMoney(asset.values?.['5']  ?? asset.current)}</td>
+              <td class="num" data-label="+10 ans">{fmtMoney(asset.values?.['10'] ?? asset.current)}</td>
+              <td class="num projected" data-label="+20 ans">{fmtMoney(asset.values?.['20'] ?? asset.current)}</td>
+              <td class="rate-cell" data-label="Taux">
                 {#if FLAT_TYPES.has(asset.type)}
                   <span class="no-rate">—</span>
                 {:else}
@@ -214,11 +214,11 @@
           {/each}
           <tr class="total-row">
             <td>Total</td>
-            <td class="num">{fmtMoney(total0)}</td>
-            <td class="num">{fmtMoney(total5)}</td>
-            <td class="num">{fmtMoney(total10)}</td>
-            <td class="num projected">{fmtMoney(total20)}</td>
-            <td></td>
+            <td class="num today" data-label="Aujourd'hui">{fmtMoney(total0)}</td>
+            <td class="num" data-label="+5 ans">{fmtMoney(total5)}</td>
+            <td class="num" data-label="+10 ans">{fmtMoney(total10)}</td>
+            <td class="num projected" data-label="+20 ans">{fmtMoney(total20)}</td>
+            <td class="rate-cell"></td>
           </tr>
         </tbody>
       </table>
@@ -254,4 +254,27 @@
 
   .total-row td { font-weight: 700; color: #f1f5f9; border-top: 2px solid #334155; }
   .total-row .projected { color: #34d399; }
+
+  @media (max-width: 600px) {
+    .panel { padding: 1rem 0; }
+    .chart-wrap { height: 260px; padding: .6rem; margin-bottom: 1.25rem; }
+
+    .summary-table thead { display: none; }
+    .summary-table, .summary-table tbody { display: block; }
+    .summary-table tr {
+      display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: .25rem .5rem; padding: .7rem .9rem; border-bottom: 1px solid #0f172a;
+    }
+    .summary-table td { padding: 0; border: none; min-width: 0; }
+    .summary-table tr:hover td { background: transparent; }
+    .summary-table td:first-child { grid-column: 1 / 3; }
+    .summary-table td.today { grid-column: 3 / 5; text-align: right; }
+    .summary-table td[data-label]::before {
+      content: attr(data-label); display: block; font-size: .64rem; color: #64748b;
+      text-transform: uppercase; letter-spacing: .04em; font-weight: 400;
+    }
+    .summary-table td.today::before { text-align: right; }
+    .rate-cell { text-align: right; }
+    .rate-cell:empty { display: none; }
+  }
 </style>
