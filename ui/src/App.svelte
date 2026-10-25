@@ -11,6 +11,8 @@
   import { checkForUpdate } from './local/update.js';
   import { updateInfo } from './lib/updateState.js';
   import { platform } from './platform/index.js';
+  import { syncState } from './lib/syncState.js';
+  import { startSyncOnOpen, dismissSyncHint } from './local/syncOnOpen.js';
 
   const TABS = [
     { id: 'portfolio', label: 'Portfolio' },
@@ -33,6 +35,7 @@
       phase = 'ready';
       dataVersion++;
       bootstrap().catch((e) => console.warn('CAGR bootstrap:', e));
+      syncOnOpen().catch((e) => console.warn('sync on open:', e));
       checkForUpdate().then((r) => updateInfo.set(r)).catch(() => {});
     } catch (e) {
       if (e instanceof StorageAccessError) {
@@ -45,6 +48,28 @@
     }
   }
 
+  // Re-read the files after Synchrotron brought changes, without the loading screen.
+  async function reloadData() {
+    await store.load();
+    dataVersion++;
+  }
+
+  let stopSync = () => {};
+  async function syncOnOpen() {
+    stopSync();
+    stopSync = await startSyncOnOpen({ onState: (s) => syncState.set(s), reload: reloadData });
+  }
+
+  function setUpSync() {
+    syncState.update((s) => ({ ...s, offer: false }));
+    platform.sync?.setUp();
+  }
+
+  function laterSync() {
+    dismissSyncHint();
+    syncState.update((s) => ({ ...s, offer: false }));
+  }
+
   async function grantAccess() {
     await platform.requestAccess();
   }
@@ -53,7 +78,9 @@
     start();
     // Coming back from the system settings screen after granting file access.
     const onVisible = () => {
-      if (!document.hidden && phase === 'needsAccess') start();
+      if (document.hidden) return;
+      if (phase === 'needsAccess') start();
+      else if (phase === 'ready') syncOnOpen().catch((e) => console.warn('sync on open:', e));
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
@@ -101,6 +128,18 @@
         <span class="path">{info?.dataDir}</span>
       </span>
     </header>
+
+    {#if $syncState.syncing}
+      <div class="sync-banner">Synchronisation avec Proton Drive… (lecture seule)</div>
+    {:else if $syncState.offer}
+      <div class="sync-banner offer">
+        <span>Synchronise tes données avec Proton Drive.</span>
+        <button class="sync-btn" on:click={setUpSync}>Configurer</button>
+        <button class="sync-btn" on:click={laterSync}>Plus tard</button>
+      </div>
+    {:else if $syncState.notice}
+      <div class="sync-banner">{$syncState.notice}</div>
+    {/if}
 
     <nav class="tabbar">
       {#each TABS as tab}
@@ -182,6 +221,16 @@
   .btn-primary:hover { background: #1d4ed8; }
 
   .app { display: flex; flex-direction: column; min-height: 100vh; }
+
+  .sync-banner {
+    background: #1e3a5f; color: #dbeafe; font-size: .85rem; padding: .5rem 1.5rem;
+    display: flex; align-items: center; gap: .75rem; flex-wrap: wrap;
+  }
+  .sync-banner.offer span { flex: 1; }
+  .sync-btn {
+    background: transparent; color: #93c5fd; border: 1px solid #3b82f6; border-radius: 6px;
+    padding: .25rem .7rem; font-size: .82rem; cursor: pointer;
+  }
 
   .statusbar {
     background: #0f172a; border-bottom: 1px solid #1e293b;

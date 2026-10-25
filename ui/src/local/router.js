@@ -2,6 +2,7 @@
 // are answered here from the local data files, so the components stay unchanged.
 import { HttpError } from './errors.js';
 import { save } from './store.js';
+import { isReadOnly } from './syncGuard.js';
 import * as portfolio from './portfolio.js';
 import * as projection from './projection.js';
 import * as rates from './rates.js';
@@ -55,6 +56,9 @@ route('GET', '/api/walk/summary/{year}', ({ params }) => walk.summary(int(params
 route('PUT', '/api/walk/day', ({ body }) => walk.setDay(body));
 
 export async function handle(method, path, body) {
+  if (isReadOnly() && method !== 'GET' && path !== '/api/portfolio/refresh') {
+    throw new HttpError(423, 'Synchronisation avec Proton Drive en cours : modification impossible pendant quelques secondes.');
+  }
   for (const r of routes) {
     if (r.method !== method) continue;
     const m = r.re.exec(path);

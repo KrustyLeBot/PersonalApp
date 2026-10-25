@@ -45,4 +45,7 @@ export const windows = {
     }
   },
   installUpdate: () => call('install_update'),
+
+  // No sync capability: the PC apps are synced by Proton's own client.
+  sync: null,
 };

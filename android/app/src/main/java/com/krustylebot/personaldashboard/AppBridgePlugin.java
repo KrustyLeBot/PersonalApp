@@ -65,6 +65,42 @@ public class AppBridgePlugin extends Plugin {
         return new File(dir, UPDATE_FILE);
     }
 
+    private SynchrotronClient.Handle syncHandle;
+
+    /**
+     * Asks Synchrotron (Proton Drive sync) for a sync now and reports it through "syncState" events:
+     * {state: syncing | done | failed | timeout | skipped, changes, conflicts, reason}.
+     */
+    @PluginMethod
+    public void syncOnOpen(PluginCall call) {
+        if (syncHandle != null) syncHandle.cancel();
+        syncHandle = SynchrotronClient.syncOnOpen(getContext(), dataDir().getAbsolutePath(), 20_000,
+                (state, changes, conflicts, reason) -> {
+                    JSObject e = new JSObject();
+                    e.put("state", state);
+                    e.put("changes", changes);
+                    e.put("conflicts", conflicts);
+                    if (reason != null) e.put("reason", reason);
+                    notifyListeners("syncState", e);
+                });
+        call.resolve();
+    }
+
+    /** Opens Synchrotron's confirmation screen to sync the data folder. */
+    @PluginMethod
+    public void setUpSync(PluginCall call) {
+        boolean ok = SynchrotronClient.registerFolder(getContext(), dataDir().getAbsolutePath(), "PersonalDashboard",
+                "Apps/PersonalDashboard", "NEWER", 180, true, "*.tmp\ncache.json");
+        JSObject ret = new JSObject();
+        ret.put("opened", ok);
+        call.resolve(ret);
+    }
+
+    @Override
+    protected void handleOnDestroy() {
+        if (syncHandle != null) syncHandle.cancel();
+    }
+
     @PluginMethod
     public void getInfo(PluginCall call) {
         try {

@@ -164,3 +164,16 @@ test('walk day validation and clearing', async () => {
   await assert.rejects(handle('PUT', '/api/walk/day', { date: `${y + 1}-01-01`, km: 3 }), /out of range/);
   await assert.rejects(handle('PUT', '/api/walk/day', { date: `${y}-01-01`, km: 5000 }), /invalid distance/);
 });
+
+test('changes are refused while Synchrotron is syncing, reads and the prices refresh stay allowed', async () => {
+  const { setReadOnly } = await import('./syncGuard.js');
+  freshState();
+  setReadOnly(true);
+  try {
+    await assert.rejects(() => handle('PUT', '/api/walk/day', { date: '2025-01-01', km: 3 }), (e) => e.status === 423);
+    await handle('GET', '/api/walk/summary/2025');
+  } finally {
+    setReadOnly(false);
+  }
+  await handle('PUT', '/api/walk/day', { date: '2025-01-01', km: 3 });
+});

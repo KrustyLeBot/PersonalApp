@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Lets the app see whether Synchrotron (Proton Drive sync) is installed. -->
+    <queries>
+        <package android:name="app.synchrotron" />
+    </queries>
+
     <application
         android:allowBackup="false"
         android:requestLegacyExternalStorage="true"

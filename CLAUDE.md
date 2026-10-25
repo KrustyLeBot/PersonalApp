@@ -29,6 +29,9 @@ docs/RELEASE.md          CI, signing key, release, auto-update
 ### Platform interface (`ui/src/platform`)
 Both platforms implement the same object: `getInfo()` (`build`, `version`, `dataDir`, `hasAccess`), `requestAccess()`, `readFile(name)`, `writeFile(name, content)`, `httpGet(url, headers)`, `downloadUpdate(asset, onProgress)`, `installUpdate()`, and `pickFolder()` on Windows only. All file access and all outgoing HTTP go through it (no CORS issue, one code path). **A new native capability must be added to both platforms.**
 
+### Proton Drive sync (Android only)
+The Android app asks Synchrotron (separate app, `KrustyLeBot/Synchrotron`) to sync `Documents/PersonalDashboard` with Proton Drive when it opens: `SynchrotronClient.java` (copy of Synchrotron's client library) → `AppBridgePlugin.syncOnOpen` → `syncState` events → `local/syncOnOpen.js`. While a sync runs the app is read-only (`local/syncGuard.js`; `router.js` answers 423 to anything but GET and the prices refresh) and the data is re-read when the sync brought changes. `cache.json` and `*.tmp` are excluded from the sync. The Windows app has nothing to do (`platform.sync` is null): Proton's own client syncs the folder there.
+
 ### The `/api` shim
 The components were written against an HTTP API and still call `fetch('/api/...')`. `router.js` replaces `window.fetch` for `/api/*` and dispatches to the services in `src/local/`, with the same request/response shapes as the old backend. New features can keep this pattern or call services directly.
 

@@ -26,4 +26,15 @@ export const android = {
     }
   },
   installUpdate: () => Bridge.installUpdate(),
+
+  // Proton Drive sync through the Synchrotron app (the PC apps are synced by Proton's own client).
+  sync: {
+    // handler({state: syncing|done|failed|timeout|skipped, changes, conflicts, reason}); returns a stop function.
+    async onOpen(handler) {
+      const handle = await Bridge.addListener('syncState', handler);
+      await Bridge.syncOnOpen();
+      return () => handle.remove();
+    },
+    setUp: () => Bridge.setUpSync(),
+  },
 };

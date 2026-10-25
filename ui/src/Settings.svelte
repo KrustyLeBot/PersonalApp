@@ -103,6 +103,19 @@
     {#if folderError}<p class="msg err">{folderError}</p>{/if}
   </section>
 
+  {#if platform.sync}
+    <section>
+      <h2>Synchronisation Proton Drive</h2>
+      <p class="hint">
+        Les données sont synchronisées par l'application Synchrotron : à l'ouverture, à chaque modification
+        et régulièrement en arrière-plan.
+      </p>
+      <div class="actions">
+        <button class="btn" on:click={() => platform.sync.setUp()}>Configurer / ouvrir Synchrotron</button>
+      </div>
+    </section>
+  {/if}
+
   <section>
     <h2>Mise à jour</h2>
     <div class="row">
