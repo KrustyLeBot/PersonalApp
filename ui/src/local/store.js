@@ -10,6 +10,10 @@ const FILES = {
   cache: 'cache.json',
 };
 
+// Read by Synchrotron (Proton Drive sync on Android): the prices cache is rebuilt on each device.
+const SYNC_IGNORE_FILE = '.syncignore';
+const SYNC_IGNORE = '# Not synced with Proton Drive (read by Synchrotron)\ncache.json\n';
+
 let state = null;
 let nextHoldingId = 1;
 let info = null;
@@ -115,6 +119,7 @@ export async function load() {
     walk: await readJson(FILES.walk, undefined),
     cache: await readJson(FILES.cache, undefined),
   });
+  if ((await platform.readFile(SYNC_IGNORE_FILE)) == null) await platform.writeFile(SYNC_IGNORE_FILE, SYNC_IGNORE);
   return state;
 }
 

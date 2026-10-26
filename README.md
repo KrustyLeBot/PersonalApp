@@ -25,6 +25,7 @@ Put these files in the data folder (they are the content of the zip exported by 
 | `telework.json` | `remote_days` (0 = Sunday … 6 = Saturday), `overrides` (`YYYY-MM-DD` → `{am, pm}` with `leave`, `remote` or `office`) |
 | `walk.json` | `entries` (`YYYY-MM-DD` → km) |
 | `cache.json` | Last Yahoo prices and refresh time. Written by the app; safe to delete |
+| `.syncignore` | Files Synchrotron leaves out of the Proton Drive sync (`cache.json`). Created by the app when missing |
 | `manifest.json` | Optional: `format_version`. The app refuses a newer format than it knows (currently 1) |
 
 Missing files are treated as empty. A file that cannot be parsed is reported and never overwritten. Writes are atomic (temporary file, then rename). Asset IDs are stable because per-asset projection rate keys (`livret_12`) refer to them.
