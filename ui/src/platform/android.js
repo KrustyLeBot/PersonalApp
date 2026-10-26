@@ -35,6 +35,5 @@ export const android = {
       await Bridge.syncOnOpen();
       return () => handle.remove();
     },
-    setUp: () => Bridge.setUpSync(),
   },
 };

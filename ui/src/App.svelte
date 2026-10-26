@@ -12,7 +12,7 @@
   import { updateInfo } from './lib/updateState.js';
   import { platform } from './platform/index.js';
   import { syncState } from './lib/syncState.js';
-  import { startSyncOnOpen, dismissSyncHint } from './local/syncOnOpen.js';
+  import { startSyncOnOpen } from './local/syncOnOpen.js';
 
   const TABS = [
     { id: 'portfolio', label: 'Portfolio' },
@@ -58,16 +58,6 @@
   async function syncOnOpen() {
     stopSync();
     stopSync = await startSyncOnOpen({ onState: (s) => syncState.set(s), reload: reloadData });
-  }
-
-  function setUpSync() {
-    syncState.update((s) => ({ ...s, offer: false }));
-    platform.sync?.setUp();
-  }
-
-  function laterSync() {
-    dismissSyncHint();
-    syncState.update((s) => ({ ...s, offer: false }));
   }
 
   async function grantAccess() {
@@ -131,12 +121,6 @@
 
     {#if $syncState.syncing}
       <div class="sync-banner">Synchronisation avec Proton Drive… (lecture seule)</div>
-    {:else if $syncState.offer}
-      <div class="sync-banner offer">
-        <span>Synchronise tes données avec Proton Drive.</span>
-        <button class="sync-btn" on:click={setUpSync}>Configurer</button>
-        <button class="sync-btn" on:click={laterSync}>Plus tard</button>
-      </div>
     {:else if $syncState.notice}
       <div class="sync-banner">{$syncState.notice}</div>
     {/if}
@@ -225,11 +209,6 @@
   .sync-banner {
     background: #1e3a5f; color: #dbeafe; font-size: .85rem; padding: .5rem 1.5rem;
     display: flex; align-items: center; gap: .75rem; flex-wrap: wrap;
-  }
-  .sync-banner.offer span { flex: 1; }
-  .sync-btn {
-    background: transparent; color: #93c5fd; border: 1px solid #3b82f6; border-radius: 6px;
-    padding: .25rem .7rem; font-size: .82rem; cursor: pointer;
   }
 
   .statusbar {

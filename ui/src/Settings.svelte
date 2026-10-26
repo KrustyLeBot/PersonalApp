@@ -107,12 +107,9 @@
     <section>
       <h2>Synchronisation Proton Drive</h2>
       <p class="hint">
-        Les données sont synchronisées par l'application Synchrotron : à l'ouverture, à chaque modification
-        et régulièrement en arrière-plan.
+        Ajoute le dossier {info?.dataDir ?? 'Documents/PersonalDashboard'} dans l'application Synchrotron :
+        l'app lui demande une synchro à chaque ouverture et reste en lecture seule le temps qu'elle se termine.
       </p>
-      <div class="actions">
-        <button class="btn" on:click={() => platform.sync.setUp()}>Configurer / ouvrir Synchrotron</button>
-      </div>
     </section>
   {/if}
 

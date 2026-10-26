@@ -86,16 +86,6 @@ public class AppBridgePlugin extends Plugin {
         call.resolve();
     }
 
-    /** Opens Synchrotron's confirmation screen to sync the data folder. */
-    @PluginMethod
-    public void setUpSync(PluginCall call) {
-        boolean ok = SynchrotronClient.registerFolder(getContext(), dataDir().getAbsolutePath(), "PersonalDashboard",
-                "Apps/PersonalDashboard", "NEWER", 180, true, "*.tmp\ncache.json");
-        JSObject ret = new JSObject();
-        ret.put("opened", ok);
-        call.resolve(ret);
-    }
-
     @Override
     protected void handleOnDestroy() {
         if (syncHandle != null) syncHandle.cancel();

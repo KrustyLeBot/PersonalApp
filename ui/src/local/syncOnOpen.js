@@ -3,24 +3,14 @@
 import { platform } from '../platform/index.js';
 import { setReadOnly } from './syncGuard.js';
 
-const HINT_KEY = 'syncHintDismissed';
-
-function hintDismissed() {
-  try { return localStorage.getItem(HINT_KEY) === '1'; } catch { return false; }
-}
-
-export function dismissSyncHint() {
-  try { localStorage.setItem(HINT_KEY, '1'); } catch { /* storage unavailable */ }
-}
-
-// onState receives {syncing, offer, notice}; reload re-reads the data files. Returns a stop function.
+// onState receives {syncing, notice}; reload re-reads the data files. Returns a stop function.
 export async function startSyncOnOpen({ onState, reload }) {
   if (!platform.sync) return () => {};
   return platform.sync.onOpen(async (e) => {
     switch (e.state) {
       case 'syncing':
         setReadOnly(true);
-        onState({ syncing: true, offer: false, notice: '' });
+        onState({ syncing: true, notice: '' });
         break;
       case 'done': {
         try {
@@ -31,24 +21,20 @@ export async function startSyncOnOpen({ onState, reload }) {
         const notice = e.conflicts
           ? 'Conflits de synchro : des fichiers .conflict sont dans le dossier'
           : e.changes > 0 ? `Données synchronisées (${e.changes} changement${e.changes > 1 ? 's' : ''})` : '';
-        onState({ syncing: false, offer: false, notice });
+        onState({ syncing: false, notice });
         break;
       }
       case 'failed':
         setReadOnly(false);
-        onState({ syncing: false, offer: false, notice: 'Échec de la synchro Proton Drive' });
+        onState({ syncing: false, notice: 'Échec de la synchro Proton Drive' });
         break;
       case 'timeout':
         setReadOnly(false);
-        onState({ syncing: false, offer: false, notice: 'Synchro longue : elle continue en arrière-plan' });
+        onState({ syncing: false, notice: 'Synchro longue : elle continue en arrière-plan' });
         break;
       default: // skipped
         setReadOnly(false);
-        onState({
-          syncing: false,
-          offer: e.reason === 'not_registered' && !hintDismissed(),
-          notice: e.reason === 'needs_setup' ? 'Termine la configuration dans Synchrotron' : '',
-        });
+        onState({ syncing: false, notice: e.reason === 'needs_setup' ? 'Termine la configuration dans Synchrotron' : '' });
     }
   });
 }
