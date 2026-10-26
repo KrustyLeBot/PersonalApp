@@ -287,7 +287,7 @@
         <div class="total-label">Patrimoine total</div>
         <div class="total-value {confidential ? 'blurred' : ''}">{fmt(summary.total || 0, confidential)}</div>
         {#if refreshError}
-          <div class="refresh-error">Actualisation impossible : {refreshError}</div>
+          <div class="refresh-error">{refreshError}</div>
         {/if}
         {#if summary.last_refresh}
           <div class="refresh-info">Cotations : {new Date(summary.last_refresh).toLocaleString('fr-FR')}</div>
