@@ -1,7 +1,7 @@
 import { getState, save } from './store.js';
 import { detteInfo, remainingCapital, parseDate, round2 } from './finance.js';
 import * as rates from './rates.js';
-import { fetchCagr } from './yahoo.js';
+import { fetchCagr, mapLimited } from './yahoo.js';
 
 export const PROJECTION_YEARS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20];
 
@@ -22,7 +22,7 @@ function flatValues(value) {
 // and one per uncategorised ticker.
 export async function refreshTickerCagrs(tickers) {
   const categories = getState().portfolio.ticker_categories;
-  const results = await Promise.allSettled(tickers.map((t) => fetchCagr(t)));
+  const results = await mapLimited(tickers, fetchCagr);
 
   const byTicker = {};
   results.forEach((r, i) => {

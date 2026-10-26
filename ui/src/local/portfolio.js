@@ -2,7 +2,7 @@ import { getState, save, newHoldingId } from './store.js';
 import { HttpError } from './errors.js';
 import { detteInfo } from './finance.js';
 import * as rates from './rates.js';
-import { fetchPrice } from './yahoo.js';
+import { fetchPrice, mapLimited } from './yahoo.js';
 import { refreshTickerCagrs, bootstrapCagrs } from './projection.js';
 
 export const TYPE_BOURSE = 'bourse';
@@ -295,7 +295,7 @@ export async function refreshTickers() {
   const { cache } = getState();
   const tickers = distinctTickers();
   if (tickers.length > 0) {
-    const results = await Promise.allSettled(tickers.map(fetchPrice));
+    const results = await mapLimited(tickers, fetchPrice);
     const fresh = results.filter((r) => r.status === 'fulfilled').map((r) => r.value);
     if (fresh.length === 0) {
       const first = results.find((r) => r.status === 'rejected');

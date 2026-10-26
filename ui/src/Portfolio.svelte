@@ -11,6 +11,7 @@
   let summary = null;
   let loading = true;
   let error = '';
+  let refreshError = ''; // a failed prices refresh must not hide the page it could not update
   let refreshing = false;
 
   // Confidential mode is persisted per-browser via localStorage, so a work
@@ -79,8 +80,10 @@
 
   async function forceRefresh() {
     refreshing = true;
+    refreshError = '';
     try {
-      await fetch('/api/portfolio/refresh', { method: 'POST' });
+      const res = await fetch('/api/portfolio/refresh', { method: 'POST' });
+      if (!res.ok) refreshError = await res.text();
       await loadSummary();
     } finally {
       refreshing = false;
@@ -283,6 +286,9 @@
       <div class="total-block">
         <div class="total-label">Patrimoine total</div>
         <div class="total-value {confidential ? 'blurred' : ''}">{fmt(summary.total || 0, confidential)}</div>
+        {#if refreshError}
+          <div class="refresh-error">Actualisation impossible : {refreshError}</div>
+        {/if}
         {#if summary.last_refresh}
           <div class="refresh-info">Cotations : {new Date(summary.last_refresh).toLocaleString('fr-FR')}</div>
         {/if}
@@ -529,6 +535,7 @@
   .total-label { font-size: .85rem; color: #94a3b8; margin-bottom: .25rem; }
   .total-value { font-size: 2.5rem; font-weight: 700; color: #f1f5f9; transition: filter .2s; }
   .total-value.blurred { filter: blur(8px); user-select: none; }
+  .refresh-error { font-size: .8rem; color: #f87171; margin-top: .25rem; }
   .refresh-info { font-size: .75rem; color: #64748b; margin-top: .25rem; }
   .top-actions { display: flex; gap: .75rem; align-items: center; }
 

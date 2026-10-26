@@ -177,3 +177,22 @@ test('changes are refused while Synchrotron is syncing, reads and the prices ref
   }
   await handle('PUT', '/api/walk/day', { date: '2025-01-01', km: 3 });
 });
+
+test('mapLimited keeps the order, settles every item and never exceeds the limit', async () => {
+  const { mapLimited } = await import('./yahoo.js');
+  let running = 0;
+  let peak = 0;
+  const results = await mapLimited([1, 2, 3, 4, 5, 6, 7], async (n) => {
+    running++;
+    peak = Math.max(peak, running);
+    await new Promise((r) => setTimeout(r, 5));
+    running--;
+    if (n === 3) throw new Error('boom');
+    return n * 10;
+  }, 3);
+  assert.ok(peak <= 3);
+  assert.deepEqual(results.map((r) => r.status), ['fulfilled', 'fulfilled', 'rejected', 'fulfilled', 'fulfilled', 'fulfilled', 'fulfilled']);
+  assert.equal(results[1].value, 20);
+  assert.equal(results[2].reason.message, 'boom');
+  assert.deepEqual(await mapLimited([], async () => 1), []);
+});
