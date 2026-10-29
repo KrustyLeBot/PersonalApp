@@ -9,6 +9,8 @@ const FILES = {
   walk: 'walk.json',
   cache: 'cache.json',
 };
+// The files other devices see; cache.json stays out of the sync.
+const SYNCED = ['portfolio', 'telework', 'walk'];
 
 // Read by Synchrotron (Proton Drive sync on Android): the prices cache is rebuilt on each device.
 const SYNC_IGNORE_FILE = '.syncignore';
@@ -87,14 +89,19 @@ export function serialize(key, data) {
   };
 }
 
-async function readJson(name, fallback) {
-  const text = await platform.readFile(name);
-  if (text == null || text.trim() === '') return fallback;
-  try {
-    return JSON.parse(text);
-  } catch (e) {
-    // Never overwrite a file we could not parse.
-    throw new Error(`${name} est illisible : ${e.message}`);
+// A sync may be replacing the file while it is read: a parse failure is retried once before the
+// file is declared unreadable (and then never overwritten).
+async function readJson(name, fallback, retryDelayMs = 300) {
+  for (let attempt = 0; ; attempt++) {
+    const text = await platform.readFile(name);
+    onDisk[name] = text;
+    if (text == null || text.trim() === '') return fallback;
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      if (attempt > 0) throw new Error(`${name} est illisible : ${e.message}`);
+      await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+    }
   }
 }
 
@@ -133,11 +140,41 @@ export function setState(next) {
   state = next;
 }
 
+// What each synced file held when it was last read or written. Another device (the phone through
+// the server, a PC over SMB) may change a file at any time: a write never replaces a version this
+// app has not seen; the data is reloaded instead.
+const onDisk = {};
+let onExternalChange = async () => {};
+
+export class ExternalChangeError extends Error {}
+
+// Called (by the app) to reload the data when a file changed elsewhere.
+export function setExternalChangeHandler(fn) {
+  onExternalChange = fn;
+}
+
+// True when a synced data file no longer holds what was last read or written.
+export async function changedOnDisk() {
+  for (const key of SYNCED) {
+    const name = FILES[key];
+    if (name in onDisk && (await platform.readFile(name)) !== onDisk[name]) return true;
+  }
+  return false;
+}
+
 // Writes are chained per file so two quick saves never interleave.
 export function save(key) {
+  const name = FILES[key];
   const body = JSON.stringify(serialize(key, getState()[key]), null, 2) + '\n';
   const prev = writeChains[key] || Promise.resolve();
-  const next = prev.catch(() => {}).then(() => platform.writeFile(FILES[key], body));
+  const next = prev.catch(() => {}).then(async () => {
+    if (SYNCED.includes(key) && name in onDisk && (await platform.readFile(name)) !== onDisk[name]) {
+      await onExternalChange();
+      throw new ExternalChangeError(`${name} a été modifié sur un autre appareil : données rechargées, refais ta modification.`);
+    }
+    await platform.writeFile(name, body);
+    onDisk[name] = body;
+  });
   writeChains[key] = next;
   return next;
 }

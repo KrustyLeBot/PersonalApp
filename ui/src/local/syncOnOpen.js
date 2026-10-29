@@ -26,7 +26,7 @@ export async function startSyncOnOpen({ onState, reload }) {
       }
       case 'failed':
         setReadOnly(false);
-        onState({ syncing: false, notice: 'Échec de la synchro Proton Drive' });
+        onState({ syncing: false, notice: 'Échec de la synchro' });
         break;
       case 'timeout':
         setReadOnly(false);

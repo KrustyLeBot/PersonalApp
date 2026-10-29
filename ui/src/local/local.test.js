@@ -1,5 +1,5 @@
 import './testenv.js';
-import { writes } from './testenv.js';
+import { writes, disk } from './testenv.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -195,4 +195,26 @@ test('mapLimited keeps the order, settles every item and never exceeds the limit
   assert.equal(results[1].value, 20);
   assert.equal(results[2].reason.message, 'boom');
   assert.deepEqual(await mapLimited([], async () => 1), []);
+});
+
+test('a file changed by another device is reloaded, never overwritten', async () => {
+  disk['walk.json'] = JSON.stringify({ walks: [] });
+  let reloaded = 0;
+  store.setExternalChangeHandler(async () => { reloaded++; });
+  await store.load();
+  await store.save('walk');
+  assert.equal(await store.changedOnDisk(), false);
+  const theirs = JSON.stringify({ walks: [{ date: '2026-10-29', km: 5 }] });
+  disk['walk.json'] = theirs; // written meanwhile on the phone, through the server share
+  assert.equal(await store.changedOnDisk(), true);
+  await assert.rejects(store.save('walk'), store.ExternalChangeError);
+  assert.equal(disk['walk.json'], theirs);
+  assert.equal(reloaded, 1);
+});
+
+test('an unparsable file is read again once, then reported', async () => {
+  disk['telework.json'] = '{broken';
+  await assert.rejects(store.load(), /telework.json est illisible/);
+  assert.equal(disk['telework.json'], '{broken');
+  delete disk['telework.json'];
 });

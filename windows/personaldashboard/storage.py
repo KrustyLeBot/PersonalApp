@@ -2,6 +2,7 @@
 
 import os
 import re
+import uuid
 from pathlib import Path
 
 DATA_FILES = ("portfolio.json", "telework.json", "walk.json")
@@ -29,12 +30,13 @@ def read_text(folder: Path, name: str) -> str | None:
 
 
 def write_text(folder: Path, name: str, content: str) -> None:
-    """Written to a temporary file then swapped in, so a crash never leaves a half-written file."""
+    """Written to `.<name>.synctmp-<uuid>` (never synced by Synchrotron), flushed to disk, then renamed
+    over the file (atomic, also on the server's SMB share): nobody ever reads a half-written file."""
     path = _target(folder, name)
-    tmp = path.with_name(path.name + ".tmp")
+    tmp = path.with_name(f".{path.name}.synctmp-{uuid.uuid4().hex}")
     try:
         Path(folder).mkdir(parents=True, exist_ok=True)
-        with open(tmp, "w", encoding="utf-8", newline="\n") as out:
+        with open(tmp, "x", encoding="utf-8", newline="\n") as out:
             out.write(content)
             out.flush()
             os.fsync(out.fileno())

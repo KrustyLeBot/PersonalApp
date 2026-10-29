@@ -64,16 +64,30 @@
     await platform.requestAccess();
   }
 
+  // Without Synchrotron (Windows), other devices change the files directly (server share, Proton's
+  // client): re-read them when they changed, rather than keep showing and saving stale data.
+  async function reloadIfChanged() {
+    if (phase === 'ready' && !document.hidden && (await store.changedOnDisk())) await reloadData();
+  }
+
   onMount(() => {
+    store.setExternalChangeHandler(reloadData);
     start();
     // Coming back from the system settings screen after granting file access.
     const onVisible = () => {
       if (document.hidden) return;
       if (phase === 'needsAccess') start();
-      else if (phase === 'ready') syncOnOpen().catch((e) => console.warn('sync on open:', e));
+      else if (phase === 'ready') {
+        syncOnOpen().catch((e) => console.warn('sync on open:', e));
+        if (!platform.sync) reloadIfChanged().catch((e) => console.warn('reload:', e));
+      }
     };
     document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
+    const timer = platform.sync ? null : setInterval(() => reloadIfChanged().catch((e) => console.warn('reload:', e)), 30000);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      if (timer) clearInterval(timer);
+    };
   });
 
   function onSettingsReload() {

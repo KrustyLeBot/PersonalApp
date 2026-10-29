@@ -28,7 +28,7 @@ Put these files in the data folder (they are the content of the zip exported by 
 | `.syncignore` | Files Synchrotron leaves out of the Proton Drive sync (`cache.json`). Created by the app when missing |
 | `manifest.json` | Optional: `format_version`. The app refuses a newer format than it knows (currently 1) |
 
-Missing files are treated as empty. A file that cannot be parsed is reported and never overwritten. Writes are atomic (temporary file, then rename). Asset IDs are stable because per-asset projection rate keys (`livret_12`) refer to them.
+Missing files are treated as empty. A file that cannot be parsed is read again once (a sync may be replacing it), then reported and never overwritten. Writes are atomic (`.<name>.synctmp-<uuid>`, flushed to disk, then renamed), and never replace a version the app has not read: when another device changed the file, the data is reloaded instead. Asset IDs are stable because per-asset projection rate keys (`livret_12`) refer to them.
 
 To migrate from the old web app: unzip the export into the data folder.
 

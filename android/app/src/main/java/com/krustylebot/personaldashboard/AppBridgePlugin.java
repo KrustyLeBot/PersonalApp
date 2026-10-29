@@ -30,6 +30,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.Iterator;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 /**
@@ -158,22 +159,24 @@ public class AppBridgePlugin extends Plugin {
         }
     }
 
-    // Written to a temporary file then renamed, so a crash never leaves a half-written file.
+    // Written to `.<name>.synctmp-<uuid>` (never synced by Synchrotron), flushed to disk, then renamed over
+    // the file: a crash, Synchrotron or a PC reading the server never sees a half-written file.
     @PluginMethod
     public void writeFile(PluginCall call) {
         File file = dataFile(call);
         if (file == null) return;
         String content = call.getString("content", "");
         File dir = dataDir();
-        File tmp = new File(dir, file.getName() + ".tmp");
+        File tmp = new File(dir, "." + file.getName() + ".synctmp-" + UUID.randomUUID());
         try {
             if (!dir.isDirectory() && !dir.mkdirs()) throw new IOException("dossier non créable : " + dir);
             try (FileOutputStream out = new FileOutputStream(tmp)) {
                 out.write(content.getBytes(StandardCharsets.UTF_8));
+                out.flush();
                 out.getFD().sync();
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                Files.move(tmp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                Files.move(tmp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
             } else {
                 //noinspection ResultOfMethodCallIgnored
                 file.delete();
